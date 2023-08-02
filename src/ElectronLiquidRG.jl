@@ -4,9 +4,10 @@ using JLD2
 using CompositeGrids
 using MCIntegration
 using ElectronLiquid
+using Measurements
+using GreenFunc
 
-# test wip
-
-# Write your package code here.
+include("para_tabel.jl")
+include("sigma.jl")
 
 end
