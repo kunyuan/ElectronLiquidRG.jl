@@ -13,18 +13,31 @@ function zfactor(data, β, ngrid=[-1, 0]) #assume the data are calculated with [
     end
 end
 
+function mu(data)
+    return real(data[1, 1])
+end
+
 function zCT(para, filename; Fs=fdict[para.rs], Λgrid=Λgrid(para.kF))
-    println("read Fs = $Fs from $filename")
+    # println("read Fs = $Fs from $filename")
     f = jldopen(filename, "r")
     # z1 = zeros(Measurement{Float64}, length(Fs), length(Λgrid))
-    z1 = MeshArray(Fs, Λgrid; dtype=Measurement{Float64})
+    sw = Dict()
+    mu = Dict()
+    partition = UEG.partition(para.order)
+    for p in partition
+        sw[p] = MeshArray(Fs, Λgrid; dtype=Measurement{Float64})
+        mu[p] = 0.0 # we don't need mu for now
+    end
     for (fi, F) in enumerate(Fs)
         _para = get_para(para, F)
         key = UEG.short(_para)
-        println(key)
         ngrid, kgrid, sigma = f[key]
         @assert kgrid ≈ Λgrid
-        z1[fi, :] = zfactor(sigma[(1, 0, 0)], _para.β)
+        for p in partition
+            sw[p][fi, :] = zfactor(sigma[p], _para.β)
+        end
     end
-    return z1
+
+    dzi, dmu, dz = CounterTerm.sigmaCT(para.order, mu, sw)
+    return dzi, dmu, dz
 end

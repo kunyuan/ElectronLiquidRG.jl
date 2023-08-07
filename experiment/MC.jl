@@ -1,15 +1,13 @@
 using ElectronLiquidRG
 using ElectronLiquid
 
-neval = 1e6
+neval = 1e7
 
 dim = 3
-rs = [1.0,]
-mass2 = [0.01,]
+rs = [5.0,]
+mass2 = [0.001,]
 beta = [25.0]
 order = [1,]
-neval = 1e7
-# neval = 1e6
 isDynamic = true
 isFock = false
 
