@@ -13,13 +13,15 @@ function zfactor(data, β, ngrid=[-1, 0]) #assume the data are calculated with [
     end
 end
 
-function zCT(para, filename; Fs=fdict[para.kF], Λgrid=Λgrid(para.kF))
+function zCT(para, filename; Fs=fdict[para.rs], Λgrid=Λgrid(para.kF))
+    println("read Fs = $Fs from $filename")
     f = jldopen(filename, "r")
     # z1 = zeros(Measurement{Float64}, length(Fs), length(Λgrid))
     z1 = MeshArray(Fs, Λgrid; dtype=Measurement{Float64})
     for (fi, F) in enumerate(Fs)
         _para = get_para(para, F)
-        key = "$(UEG.short(_para))"
+        key = UEG.short(_para)
+        println(key)
         ngrid, kgrid, sigma = f[key]
         @assert kgrid ≈ Λgrid
         z1[fi, :] = zfactor(sigma[(1, 0, 0)], _para.β)
