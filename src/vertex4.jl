@@ -29,10 +29,10 @@ function vertex4_renormalize(para, filename, dz; Fs=fdict[para.rs], Λgrid=Λgri
     end
 
     vuu = CounterTerm.mergeInteraction(vuu)
-    # vuu = CounterTerm.z_renormalization(para.order, vuu, dz, 1)
+    vuu = CounterTerm.z_renormalization(para.order, vuu, dz, 1)
 
     vud = CounterTerm.mergeInteraction(vud)
-    # vud = CounterTerm.z_renormalization(para.order, vud, dz, 1)
+    vud = CounterTerm.z_renormalization(para.order, vud, dz, 1)
 
     vuu = [vuu[(o, 0)] for o in 1:para.order]
     vud = [vud[(o, 0)] for o in 1:para.order]
