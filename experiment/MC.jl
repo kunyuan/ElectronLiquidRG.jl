@@ -4,8 +4,8 @@ using ElectronLiquid
 neval = 1e7
 
 dim = 3
-rs = [5.0,]
-mass2 = [0.001,]
+rs = [1.0,]
+mass2 = [0.01,]
 beta = [25.0]
 order = [1,]
 isDynamic = true
