@@ -1,5 +1,7 @@
 using ElectronLiquid
 import ElectronLiquidRG as RG
+using Measurements
+using GreenFunc
 using JLD2
 using Printf
 
@@ -26,15 +28,34 @@ function get_z()
     return dz
 end
 
+function get_ver3()
+    para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order+1)
+    Fs = RG.fdict[para.rs]
+    Λgrid= RG.Λgrid(para.kF)
+    # println("Fs = $Fs")
+    # println("Λgrid = $Λgrid")
+
+    f = jldopen("data/ver3.jld2", "r")
+    # z1 = zeros(Measurement{Float64}, length(Fs), length(Λgrid))
+    ver3 = MeshArray(Fs, Λgrid; dtype=Complex{Measurement{Float64}})
+
+    for (fi, F) in enumerate(Fs)
+        _para = RG.get_para(para, F)
+        key = UEG.short(_para)
+        kgrid, _ver3 = f[key]
+        ver3[fi, :] = _ver3
+        @assert kgrid ≈ Λgrid
+    end
+    return ver3
+end
+
 function get_ver4(dz)
     para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order+1)
     Fs = RG.fdict[para.rs]
     Λgrid= RG.Λgrid(para.kF)
-    println("Fs = $Fs")
-    println("Λgrid = $Λgrid")
+    # println("Fs = $Fs")
+    # println("Λgrid = $Λgrid")
     vuu, vud = RG.vertex4_renormalize(para, "data/ver4.jld2", dz; Fs=Fs, Λgrid=Λgrid)
-    kgrid = Λgrid[1:10:end]
-    kF = para.kF
 
     return vuu, vud
 end
@@ -82,6 +103,8 @@ function print_ver4(vuu, vud, fi = size(vuu[1])[1]; nsample = 5)
 end
 
 dz = get_z()
+ver3 = get_ver3()
+println("ver3: ", ver3[end, :])
 vuu, vuv = get_ver4(dz)
 print_ver4(vuu, vuv, 1; nsample=20)
 print_ver4(vuu, vuv; nsample = 20)

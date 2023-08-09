@@ -28,5 +28,8 @@ for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
 
         println("Ver4 on $(UEG.short(para))")
         ElectronLiquidRG.vertex4(para, Λgrid=Λgrid, neval=neval, filename="data/ver4.jld2")
+
+        println("ver3 on $(UEG.short(para))")
+        ElectronLiquidRG.vertex3(para, kamp=Λgrid, neval=neval, filename="data/ver3.jld2")
     end
 end

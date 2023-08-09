@@ -1,6 +1,5 @@
 using ElectronLiquidRG
+using ElectronLiquid
 using Test
 
-@testset "ElectronLiquidRG.jl" begin
-    # Write your tests here.
-end
+include("vertex3.jl")
