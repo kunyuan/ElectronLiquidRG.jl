@@ -8,8 +8,12 @@ using Measurements
 using GreenFunc
 using FeynmanDiagram
 
+using LinearAlgebra
+using Lehmann
+
 include("para_tabel.jl")
 include("sigma.jl")
 include("vertex4.jl")
+include("vertex3.jl")
 
 end
