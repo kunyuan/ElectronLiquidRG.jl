@@ -30,3 +30,8 @@ function ∂R_∂F_exchange(para, kamp, kamp2; ct=false)
     dFs = Ver4.Legrendre(0, wp, angle)
     return dFs/para.NF
 end
+
+function R_exchange(para, kamp, kamp2; ct=false)
+    wp, wm, angle = Ver4.exchange_interaction(p, kamp, kamp2; ct=ct)
+    return Ver4.Legrendre(0, wp, angle)
+end

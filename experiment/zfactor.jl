@@ -4,6 +4,7 @@ using Measurements
 using GreenFunc
 using JLD2
 using Printf
+using DifferentialEquations
 
 const rs = 1.0
 const beta = 25.0
@@ -13,21 +14,24 @@ const order = 1
 const para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order+1)
 
 const Fs = RG.fdict[para.rs]
+# const Fs = [-0.2,]
 const Λgrid= RG.Λgrid(para.kF)
 
 function get_z()
-    dzi, dmu, dz = RG.zCT(para, "data/sigma.jld2"; Fs=Fs, Λgrid=Λgrid)
+
+    _para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order)
+
+    dzi, dmu, dz = RG.zCT(_para, "data/sigma.jld2"; Fs=Fs, Λgrid=Λgrid)
 
     z1 = dz[1]
 
-    println(z1[end, :])
-    println(z1.mesh[1][end])
-    println(z1.mesh[2][1])
+    println(z1[:, 1])
 
     return dz
 end
 
 function get_ver3()
+    para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order+1)
     f = jldopen("data/ver3.jld2", "r")
     # z1 = zeros(Measurement{Float64}, length(Fs), length(Λgrid))
     ver3 = MeshArray(Fs, Λgrid; dtype=Complex{Measurement{Float64}})
@@ -43,7 +47,10 @@ function get_ver3()
 end
 
 function get_ver4(dz)
-    vuu, vud = RG.vertex4_renormalize(para, "data/ver4.jld2", dz; Fs=Fs, Λgrid=Λgrid)
+
+    _para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order+1)
+
+    vuu, vud = RG.vertex4_renormalize(_para, "data/ver4.jld2", dz; Fs=Fs, Λgrid=Λgrid)
 
     return vuu, vud
 end
@@ -65,6 +72,9 @@ end
 
 
 function print_ver4(vuu, vud, fi = size(vuu[1])[1]; nsample = 5)
+
+    _para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order+1)
+
     kF = para.kF
     # Fs = RG.fdict[para.rs]
     # kgrid= RG.Λgrid(para.kF)
@@ -105,15 +115,33 @@ function print_ver4(vuu, vud, fi = size(vuu[1])[1]; nsample = 5)
     end
 end
 
-a(Fs, k, vs) = RG.linear_interp(Fs, vs, k)
+function solve_RG(vuu, vud, ver3; max_iter = 1000)
+    function Rex(Fs, k)
+        _p = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs, Fa=-0.0, isDynamic=true, order=1)
+        return RG.R_exchange(_p, k, _p.kF)
+    end
 
-b(Fs, k, ver3) = RG.linear_interp(Fs, vs, ver3)/para.NF 
+    a(Fs, k, vs) = RG.linear_interp(Fs, vs, k)
+    b(Fs, k, ver3) = RG.linear_interp(Fs, vs, ver3)/para.NF 
 
-const c = para.me/8/π/para.NF # ~0.2 for rs=1
+    vs = -real.((vuu+vuv))/2.0 # -Gamma4 (multi-loop Feynman diagrams are for -Gamma4)
+    ver3 = -real.(ver3) # -Gamma3 (because the direct interaction is negative)
 
-function solve_RG(vuu, vud, ver3)
-    a = (vuu+vuv)/2.0
-    b = ver3
+    c = para.me/8/π/para.NF # ~0.2 for rs=1
+
+    Λgrid = RG.Λgrid(para.kF)
+
+    Fs_Λ = zeros(length(Λgrid))
+    u_Λ = zeros(length(Λgrid))
+    du_Λ = zeros(length(Λgrid))
+
+    for i in 1:max_iter
+        for (ui, _u) in enumerate(u_Λ)
+            k = Λgrid[ui]
+            _Fs = Fs_Λ[ui]
+            u[ui] = -Rex(_Fs, k) 
+        end
+    end
 
 end
 
@@ -121,8 +149,7 @@ dz = get_z()
 ver3 = get_ver3()
 print_ver3(ver3; nsample =10)
 vuu, vud = get_ver4(dz)
-print_ver4(vuu, vuv, 1; nsample=10)
-print_ver4(vuu, vuv; nsample = 10)
-
-vs = (vuu + vud) / 2.0
-ver3 = 
+print_ver4(vuu, vud, 1; nsample=10)
+print_ver4(vuu, vud, 10; nsample=10)
+print_ver4(vuu, vud, 14; nsample=10)
+print_ver4(vuu, vud; nsample = 10)

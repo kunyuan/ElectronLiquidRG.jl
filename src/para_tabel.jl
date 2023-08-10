@@ -1,6 +1,6 @@
 
 fdict = Dict()
-fdict[1.0] = collect(LinRange(-1.0, 0.0, 16))
+fdict[1.0] = collect(LinRange(-0.4, 0.0, 20))
 fdict[5.0] = collect(LinRange(-2.0, 0.0, 8))
 
 Λgrid(kF) = CompositeGrid.LogDensedGrid(:gauss, [1.0 * kF, 100 * kF], [kF,], 8, 0.01 * kF, 8)

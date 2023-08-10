@@ -32,7 +32,8 @@ function zCT(para, filename; Fs=fdict[para.rs], Λgrid=Λgrid(para.kF))
         _para = get_para(para, F)
         key = UEG.short(_para)
         ngrid, kgrid, sigma = f[key]
-        @assert kgrid ≈ Λgrid
+        # println(kgrid, ", ", Λgrid)
+        @assert kgrid ≈ Λgrid "length(kgrid) = $(length(kgrid)), length(Λgrid) = $(length(Λgrid))"
         for p in partition
             sw[p][fi, :] = zfactor(sigma[p], _para.β)
         end

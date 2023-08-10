@@ -28,7 +28,8 @@ function _PP(vars, config)
     vq = -UEG.interactionStatic(para, qd, 0.0, t1)
     wq = -UEG.interactionDynamic(para, qd, 0.0, t1)
 
-    # vq = -4π *para.e0^2 / (qd^2+para.mass2)/para.β 
+    # vq0 = -4π *para.e0^2 / (qd^2+para.mass2) /para.β 
+    # @assert vq ≈ vq0 "vq=$vq, vq0=$vq0, qd=$qd, t1=$t1"
     # wq = 0.0
     # println(t1)
 

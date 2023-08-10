@@ -14,6 +14,7 @@ isFock = false
 
 for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
     for _F in ElectronLiquidRG.fdict[_rs]
+    # for _F in [-0.2]
     # for _F in [0.0, ]
         para = UEG.ParaMC(rs=_rs, beta=_beta, Fs=_F, order=_order, mass2=_mass2, isDynamic=isDynamic, dim=dim, isFock=isFock)
         kF = para.kF
@@ -27,7 +28,10 @@ for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
         para = UEG.ParaMC(rs=_rs, beta=_beta, Fs=_F, order=_order+1, mass2=_mass2, isDynamic=isDynamic, dim=dim, isFock=isFock)
 
         println("Ver4 on $(UEG.short(para))")
-        ElectronLiquidRG.vertex4(para, Λgrid=Λgrid, neval=neval, filename="data/ver4.jld2")
+        ver4, res = ElectronLiquidRG.vertex4(para, Λgrid=Λgrid, neval=neval, filename="data/ver4.jld2")
+        if isnothing(ver4) == false
+            println(ver4[(2, 0, 0)][2, 1, 1])
+        end
 
         println("ver3 on $(UEG.short(para))")
         ElectronLiquidRG.vertex3(para, kamp=Λgrid, neval=neval, filename="data/ver3.jld2")
