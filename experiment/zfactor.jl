@@ -10,13 +10,12 @@ const beta = 25.0
 const mass2 = 0.01
 const order = 1
 
-function get_z()
-    para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order)
-    Fs = RG.fdict[para.rs]
-    Λgrid= RG.Λgrid(para.kF)
-    # println("Fs = $Fs")
-    # println("Λgrid = $Λgrid")
+const para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order+1)
 
+const Fs = RG.fdict[para.rs]
+const Λgrid= RG.Λgrid(para.kF)
+
+function get_z()
     dzi, dmu, dz = RG.zCT(para, "data/sigma.jld2"; Fs=Fs, Λgrid=Λgrid)
 
     z1 = dz[1]
@@ -29,12 +28,6 @@ function get_z()
 end
 
 function get_ver3()
-    para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order+1)
-    Fs = RG.fdict[para.rs]
-    Λgrid= RG.Λgrid(para.kF)
-    # println("Fs = $Fs")
-    # println("Λgrid = $Λgrid")
-
     f = jldopen("data/ver3.jld2", "r")
     # z1 = zeros(Measurement{Float64}, length(Fs), length(Λgrid))
     ver3 = MeshArray(Fs, Λgrid; dtype=Complex{Measurement{Float64}})
@@ -50,18 +43,28 @@ function get_ver3()
 end
 
 function get_ver4(dz)
-    para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order+1)
-    Fs = RG.fdict[para.rs]
-    Λgrid= RG.Λgrid(para.kF)
-    # println("Fs = $Fs")
-    # println("Λgrid = $Λgrid")
     vuu, vud = RG.vertex4_renormalize(para, "data/ver4.jld2", dz; Fs=Fs, Λgrid=Λgrid)
 
     return vuu, vud
 end
 
+function print_ver3(ver3, fi = size(ver3)[1]; nsample = 5)
+    kF = para.kF
+    Fs = ver3.mesh[1]
+    kgrid = ver3.mesh[2]
+    step = Int(ceil(length(kgrid)/nsample))
+    kidx = [i for i in 1:step:length(kgrid)]
+    # fi = length(Fs)
+    println("Fs = $(Fs[fi]) at index $fi")
+    printstyled(@sprintf("%12s    %24s\n",
+            "k/kF", "ver3"), color=:yellow)
+    for ki in kidx
+        @printf("%12.6f    %24s\n", kgrid[ki] / kF, "$(ver3[fi, ki])")
+    end
+end
+
+
 function print_ver4(vuu, vud, fi = size(vuu[1])[1]; nsample = 5)
-    para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order)
     kF = para.kF
     # Fs = RG.fdict[para.rs]
     # kgrid= RG.Λgrid(para.kF)
@@ -102,9 +105,24 @@ function print_ver4(vuu, vud, fi = size(vuu[1])[1]; nsample = 5)
     end
 end
 
+a(Fs, k, vs) = RG.linear_interp(Fs, vs, k)
+
+b(Fs, k, ver3) = RG.linear_interp(Fs, vs, ver3)/para.NF 
+
+const c = para.me/8/π/para.NF # ~0.2 for rs=1
+
+function solve_RG(vuu, vud, ver3)
+    a = (vuu+vuv)/2.0
+    b = ver3
+
+end
+
 dz = get_z()
 ver3 = get_ver3()
-println("ver3: ", ver3[end, :])
-vuu, vuv = get_ver4(dz)
-print_ver4(vuu, vuv, 1; nsample=20)
-print_ver4(vuu, vuv; nsample = 20)
+print_ver3(ver3; nsample =10)
+vuu, vud = get_ver4(dz)
+print_ver4(vuu, vuv, 1; nsample=10)
+print_ver4(vuu, vuv; nsample = 10)
+
+vs = (vuu + vud) / 2.0
+ver3 = 
