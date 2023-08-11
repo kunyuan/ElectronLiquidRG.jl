@@ -17,7 +17,7 @@ function mu(data)
     return real(data[1, 1])
 end
 
-function zCT(para, filename; Fs=fdict[para.rs], Λgrid=Λgrid(para.kF))
+function zCT(para, filename; Fs=fdict[para.rs], Λgrid=SparseΛgrid(para.kF))
     # println("read Fs = $Fs from $filename")
     f = jldopen(filename, "r")
     # z1 = zeros(Measurement{Float64}, length(Fs), length(Λgrid))
@@ -32,7 +32,7 @@ function zCT(para, filename; Fs=fdict[para.rs], Λgrid=Λgrid(para.kF))
         _para = get_para(para, F)
         key = UEG.short(_para)
         ngrid, kgrid, sigma = f[key]
-        # println(kgrid, ", ", Λgrid)
+        println(length(kgrid), ", ", length(Λgrid))
         @assert kgrid ≈ Λgrid "length(kgrid) = $(length(kgrid)), length(Λgrid) = $(length(Λgrid))"
         for p in partition
             sw[p][fi, :] = zfactor(sigma[p], _para.β)

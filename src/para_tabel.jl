@@ -1,9 +1,12 @@
 
 fdict = Dict()
-fdict[1.0] = collect(LinRange(-0.4, 0.0, 20))
+fdict[1.0] = collect(LinRange(-0.4, 0.0, 19))
 fdict[5.0] = collect(LinRange(-2.0, 0.0, 8))
 
 Λgrid(kF) = CompositeGrid.LogDensedGrid(:gauss, [1.0 * kF, 100 * kF], [kF,], 8, 0.01 * kF, 8)
+
+# SparseΛgrid(kF) = CompositeGrid.LogDensedGrid(:gauss, [1.0 * kF, 32 * kF], [kF,], 4, 0.1 * kF, 4)
+SparseΛgrid(kF) = CompositeGrid.LogDensedGrid(:uniform, [1.0 * kF, 16 * kF], [kF,], 4, 0.1 * kF, 4)
 
 get_para(para, Fs) = UEG.ParaMC(rs=para.rs, beta=para.beta, Fs=Fs, Fa=-0.0, order=para.order,
     mass2=para.mass2, isDynamic=true, isFock=false)
@@ -36,6 +39,69 @@ function u_from_f(para::ParaMC, kamp=para.kF, kamp2=kamp; verbose=0, N=32)
     # assert all wp elements are positive
     # @assert all(wp .> 0.0) "wp grid is not positive"
     return Ver4.Legrendre(0, wp, angle) + para.Fs, θgrid, wp
+end
+
+"""
+    function KO(para::ParaMC, kamp=para.kF, kamp2=para.kF; N=100, mix=1.0, verbose=1, ct=false)
+    
+    Calculate Fs with the self-consistent equation
+    ```math
+    f_s = -\\left< (v_q+f_s)/(1-(v_q+f_s)Π_0) \\right>
+    ```
+"""
+function KO(para::ParaMC, kamp=para.kF, kamp2=para.kF; a_s=0.0, N=100, mix=0.8, verbose=0, eps=1e-5, spin_spin=false, Fp=-0.2 * para.rs + 4π / para.me * a_s, Fm=0.0)
+
+    u = 0.0
+
+    function _u(fs)
+        p_l = UEG.ParaMC(rs=para.rs, beta=para.beta, Fs=fs, Fa=0.0, order=1, mass2=para.mass2, isDynamic=true, isFock=false)
+        wp, wm, angle = Ver4.exchange_interaction(p_l, kamp, kamp2; ct=false, verbose=verbose)
+        return Ver4.Legrendre(0, wp, angle) + fs - 4 * π / para.me * a_s
+    end
+
+    function _u_f(fs)
+        p_l = UEG.ParaMC(rs=para.rs, beta=para.beta, Fs=fs, Fa=0.0, order=1, mass2=para.mass2, isDynamic=true, isFock=false)
+        wp, wm, angle = Ver4.exchange_interaction_df(p_l, kamp, kamp2; ct=false, verbose=verbose)
+        return (Ver4.Legrendre(0, wp, angle)) / para.NF + 1.0
+    end
+
+    function newtown(fs)
+        iter = 1
+        err = eps * 10
+        while err > eps && iter < N
+            if verbose > 1
+                println("$fs ->", fs - _u(fs) / _u_f(fs), " with ", _u(fs), ", ", _u_f(fs))
+            end
+            fx = _u(fs)
+            fs_new = fs - fx / _u_f(fs)
+            # err = abs(fs - fs_new)
+            err = abs(fx)
+            fs = fs_new
+            iter += 1
+            if iter >= N
+                @warn("Newton-Raphson method doesn't converge. error = $err, got $fs")
+            end
+        end
+        return fs
+    end
+
+    if spin_spin == false
+        _Fs = newtown(Fp)
+        p_l = UEG.ParaMC(rs=para.rs, beta=para.beta, Fs=_Fs, Fa=0.0, order=1, mass2=para.mass2, isDynamic=true, isFock=false)
+        wp, wm, angle = Ver4.exchange_interaction(p_l, kamp, kamp2; ct=false, verbose=verbose)
+        u = Ver4.Legrendre(0, wp, angle)
+        if verbose > 0
+            println("Self-consistent approach: ")
+            println("Fs = ", _Fs)
+            println("Fa = ", 0.0)
+            println("u = ", u)
+            println("4π a_s/m = ", 4π / para.me * a_s)
+            # @assert abs(u + _Fs - 4π / para.me * a_s) < 10 * eps "u is not consistent with 4π a_s/m with error $(u + _Fs - 4π / para.me * a_s)"
+        end
+        return _Fs, 0.0, u
+    else
+        @assert spin_spin == false "Spin-Spin KO interaciton doesn't work yet."
+    end
 end
 
 @inline function linear2D(data, xgrid, ygrid, x, y)
@@ -77,5 +143,11 @@ end
 
 function linear_interp(Gf, Fmesh, Kmesh, Fs, k)
     # println("GF: ", Gf)
+    if k>Kmesh[end]
+        return zero(eltype(Gf.data))
+    end
+    # @assert Fs <maximum(Fmesh) "Fs $Fs is larger than maximum of Fmesh"
+    # @assert Fs > minimum(Fmesh) "Fs $Fs is smaller than minimum of Fmesh"
+
     return linear2D(Gf.data, Fmesh, Kmesh, Fs, k)
 end

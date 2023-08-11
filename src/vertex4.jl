@@ -5,7 +5,7 @@ function vertex4(para; neval=1e6, Λgrid=Λgrid(para.kF), n=[-1, 0, 0, -1], l=[0
     return ver4, result
 end
 
-function vertex4_renormalize(para, filename, dz; Fs=fdict[para.rs], Λgrid=Λgrid(para.kF))
+function vertex4_renormalize(para, filename, dz; Fs=fdict[para.rs], Λgrid=SparseΛgrid(para.kF))
     # println("read Fs = $Fs from $filename")
     kF = para.kF
     f = jldopen(filename, "r")
