@@ -32,6 +32,6 @@ function ∂R_∂F_exchange(para, kamp, kamp2; ct=false)
 end
 
 function R_exchange(para, kamp, kamp2; ct=false)
-    wp, wm, angle = Ver4.exchange_interaction(p, kamp, kamp2; ct=ct)
+    wp, wm, angle = Ver4.exchange_interaction(para, kamp, kamp2; ct=ct)
     return Ver4.Legrendre(0, wp, angle)
 end

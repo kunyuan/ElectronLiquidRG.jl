@@ -4,7 +4,8 @@ using Measurements
 using GreenFunc
 using JLD2
 using Printf
-using DifferentialEquations
+# using DifferentialEquations
+using CompositeGrids
 
 const rs = 1.0
 const beta = 25.0
@@ -115,17 +116,23 @@ function print_ver4(vuu, vud, fi = size(vuu[1])[1]; nsample = 5)
     end
 end
 
-function solve_RG(vuu, vud, ver3; max_iter = 1000)
+function solve_RG(vuu, vud, ver3; max_iter = 100)
     function Rex(Fs, k)
         _p = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs, Fa=-0.0, isDynamic=true, order=1)
         return RG.R_exchange(_p, k, _p.kF)
     end
 
-    a(Fs, k, vs) = RG.linear_interp(Fs, vs, k)
-    b(Fs, k, ver3) = RG.linear_interp(Fs, vs, ver3)/para.NF 
+    Fmesh = SimpleG.Arbitrary{Float64}(vuu[1].mesh[1])
+    Kmesh = vuu[1].mesh[2]
 
-    vs = -real.((vuu+vuv))/2.0 # -Gamma4 (multi-loop Feynman diagrams are for -Gamma4)
+    a(Fs::Float64, k::Float64, vs) = RG.linear_interp(vs, Fmesh, Kmesh, Fs, k)
+    b(Fs::Float64, k::Float64, ver3) = RG.linear_interp(ver3, Fmesh, Kmesh, Fs, k)/para.NF 
+
+    vs = -real.((vuu+vud))/2.0 # -Gamma4 (multi-loop Feynman diagrams are for -Gamma4)
+    vs1, vs2 = vs[1], vs[2]
     ver3 = -real.(ver3) # -Gamma3 (because the direct interaction is negative)
+    # println(" vs : ", vs)
+    # println(" ver3 : ", ver3)
 
     c = para.me/8/π/para.NF # ~0.2 for rs=1
 
@@ -136,13 +143,33 @@ function solve_RG(vuu, vud, ver3; max_iter = 1000)
     du_Λ = zeros(length(Λgrid))
 
     for i in 1:max_iter
-        for (ui, _u) in enumerate(u_Λ)
+        Fs_Λ_new = zeros(length(Λgrid))
+        u_Λ_new = zeros(length(Λgrid))
+        para_Λ = [ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs_Λ[ui], Fa=-0.0, isDynamic=true) for ui in eachindex(Λgrid)]
+        b_Λ = [b(Fs_Λ[ki], k, ver3).val for (ki, k) in enumerate(Λgrid)]
+        for ui in eachindex(Λgrid)
             k = Λgrid[ui]
-            _Fs = Fs_Λ[ui]
-            u[ui] = -Rex(_Fs, k) 
-        end
-    end
 
+            _u = u_Λ[ui]
+            _Fs = Fs_Λ[ui]
+            _a = a(_Fs, k, vs2).val
+            _b = b_Λ[ui] 
+            _c = c*Interp.integrate1D(u_Λ .^2, Λgrid, [Λgrid[ui], Λgrid[end]])
+            _b_deriv = Interp.integrate1D(du_Λ .* b_Λ, Λgrid, [Λgrid[ui], Λgrid[end]])
+
+            Fs_Λ_new[ui] = -Rex(_Fs, k)/2.0 + _a + _b*u_Λ[ui] + _b_deriv -_c
+            u_Λ_new[ui] = RG.u_from_f(para_Λ[ui], k, para.kF)[1]
+        end
+        diff_u = maximum(abs.(u_Λ_new - u_Λ))
+        diff_Fs = maximum(abs.(Fs_Λ_new - Fs_Λ))
+        println("iter $i, diff_u = $diff_u, diff_Fs = $diff_Fs")
+        if diff_Fs/maximum(abs.(Fs_Λ)) < 1e-3 
+            break
+        end
+        u_Λ = u_Λ_new
+        Fs_Λ = Fs_Λ_new
+    end
+    return u_Λ, Fs_Λ, du_Λ
 end
 
 dz = get_z()
@@ -150,6 +177,6 @@ ver3 = get_ver3()
 print_ver3(ver3; nsample =10)
 vuu, vud = get_ver4(dz)
 print_ver4(vuu, vud, 1; nsample=10)
-print_ver4(vuu, vud, 10; nsample=10)
-print_ver4(vuu, vud, 14; nsample=10)
 print_ver4(vuu, vud; nsample = 10)
+
+solve_RG(vuu, vud, ver3)

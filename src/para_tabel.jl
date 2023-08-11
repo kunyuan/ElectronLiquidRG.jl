@@ -38,6 +38,44 @@ function u_from_f(para::ParaMC, kamp=para.kF, kamp2=kamp; verbose=0, N=32)
     return Ver4.Legrendre(0, wp, angle) + para.Fs, θgrid, wp
 end
 
-function linear_interp(Gf, Fs, k)
-    return UEG.linear2D(Gf.data, Gf.mesh[1], Gf.mesh[2], Fs, k)
+@inline function linear2D(data, xgrid, ygrid, x, y)
+
+    xarray, yarray = xgrid.grid, ygrid.grid
+
+    xi0, xi1, yi0, yi1 = 0, 0, 0, 0
+    if (x <= xarray[firstindex(xgrid)])
+        xi0 = 1
+        xi1 = 2
+    elseif (x >= xarray[lastindex(xgrid)])
+        xi0 = lastindex(xgrid) - 1
+        xi1 = xi0 + 1
+    else
+        xi0 = floor(xgrid, x)
+        xi1 = xi0 + 1
+    end
+
+    if (y <= yarray[firstindex(ygrid)])
+        yi0 = 1
+        yi1 = 2
+    elseif (y >= yarray[lastindex(ygrid)])
+        yi0 = lastindex(ygrid) - 1
+        yi1 = yi0 + 1
+    else
+        yi0 = floor(ygrid, y)
+        yi1 = yi0 + 1
+    end
+
+    dx0, dx1 = x - xarray[xi0], xarray[xi1] - x
+    dy0, dy1 = y - yarray[yi0], yarray[yi1] - y
+
+    g0 = data[xi0, yi0] * dx1 + data[xi1, yi0] * dx0
+    g1 = data[xi0, yi1] * dx1 + data[xi1, yi1] * dx0
+
+    gx = (g0 * dy1 + g1 * dy0) / (dx0 + dx1) / (dy0 + dy1)
+    return gx
+end
+
+function linear_interp(Gf, Fmesh, Kmesh, Fs, k)
+    # println("GF: ", Gf)
+    return linear2D(Gf.data, Fmesh, Kmesh, Fs, k)
 end
