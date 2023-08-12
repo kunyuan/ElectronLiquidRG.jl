@@ -13,7 +13,6 @@
 *.err
 *.out
 host.txt
-*.jld2
 .history
 *.pdf
 *.png
