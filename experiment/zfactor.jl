@@ -179,7 +179,6 @@ function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
     for i in 1:max_iter
         Fs_Λ_new = zeros(length(Λgrid))
         u_Λ_new = zeros(length(Λgrid))
-        para_Λ = [UEG.ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs_Λ[ui], Fa=-0.0, isDynamic=true) for ui in eachindex(Λgrid)]
         b_Λ = [b(Fs_Λ[ki], k, ver3).val for (ki, k) in enumerate(Λgrid)]
         for ui in eachindex(Λgrid)
             k = Λgrid[ui]
@@ -191,8 +190,8 @@ function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
             _c = c * Interp.integrate1D(u_Λ .^ 2, Λgrid, [Λgrid[ui], Λgrid[end]])
             _b_deriv = Interp.integrate1D(du_Λ .* b_Λ, Λgrid, [Λgrid[ui], Λgrid[end]])
 
-            # Fs_Λ_new[ui] = -Rex(_Fs, k)/2.0 + _a + _b*u_Λ[ui] + _b_deriv -_c
-            Fs_Λ_new[ui] = -Rex(_Fs, k) + _a
+            Fs_Λ_new[ui] = -Rex(_Fs, k) + _a + _b * u_Λ[ui] + _b_deriv - _c
+            # Fs_Λ_new[ui] = -Rex(_Fs, k) + _a
 
             para_new = UEG.ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs_Λ_new[ui], Fa=-0.0, isDynamic=true)
             u_Λ_new[ui] = RG.u_from_f(para_new, k, para.kF)[1]
@@ -212,10 +211,21 @@ function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
         end
         u_Λ .= u_Λ * mix .+ u_Λ_new * (1 - mix)
         Fs_Λ .= Fs_Λ * mix .+ Fs_Λ_new * (1 - mix)
+
+        w = [a(Fs_Λ[ki], k, vs2).err for (ki, k) in enumerate(Λgrid)]
+        smoothed, dFs_Λ = compute_derivative(Λgrid, Fs_Λ, s=(maximum(w))^2 * 2)
+
+        para_Λ = [UEG.ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs_Λ[ui], Fa=-0.0, isDynamic=true) for ui in eachindex(Λgrid)]
+        ∂R_∂Λ = [RG.∂R_∂Λ_exchange(para_Λ[i], k, para.kF) for (i, k) in enumerate(Λgrid)]
+        ∂R_∂F = [RG.∂R_∂F_exchange(para_Λ[i], k, para.kF) for (i, k) in enumerate(Λgrid)]
+        du_Λ = [(1 + ∂R_∂F[i]) * dFs_Λ[i] + ∂R_∂Λ[i] for i in eachindex(Λgrid)]
+
     end
 
+
+    u_ref = [-Interp.integrate1D(du_Λ, Λgrid, [Λgrid[i], Λgrid[end]]) for i in eachindex(Λgrid)]
     for li in eachindex(Λgrid)
-        println(Λgrid[li] / para.kF, " : ", Fs_Λ[li], " - ", u_Λ[li])
+        println(Λgrid[li] / para.kF, " : ", Fs_Λ[li], " - ", u_Λ[li], " ref ", u_ref[li])
     end
 
     # du_Λ = compute_derivative(Λgrid, u_Λ)
