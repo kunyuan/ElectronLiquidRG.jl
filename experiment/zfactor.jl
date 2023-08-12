@@ -189,6 +189,7 @@ function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
             _b = b_Λ[ui]
             _c = c * Interp.integrate1D(u_Λ .^ 2, Λgrid, [Λgrid[ui], Λgrid[end]])
             _b_deriv = Interp.integrate1D(du_Λ .* b_Λ, Λgrid, [Λgrid[ui], Λgrid[end]])
+            println("_a = $_a, _b = $_b, _c = $_c, _b_deriv = $_b_deriv")
 
             Fs_Λ_new[ui] = -Rex(_Fs, k) + _a + _b * u_Λ[ui] + _b_deriv - _c
             # Fs_Λ_new[ui] = -Rex(_Fs, k) + _a
