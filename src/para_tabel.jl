@@ -3,7 +3,7 @@ fdict = Dict()
 fdict[1.0] = collect(LinRange(-0.4, 0.0, 19))
 fdict[5.0] = collect(LinRange(-2.0, 0.0, 8))
 
-Λgrid(kF) = CompositeGrid.LogDensedGrid(:gauss, [1.0 * kF, 100 * kF], [kF,], 8, 0.01 * kF, 8)
+Λgrid(kF) = CompositeGrid.LogDensedGrid(:uniform, [1.0 * kF, 100 * kF], [kF,], 8, 0.1 * kF, 8)
 
 # SparseΛgrid(kF) = CompositeGrid.LogDensedGrid(:gauss, [1.0 * kF, 32 * kF], [kF,], 4, 0.1 * kF, 4)
 SparseΛgrid(kF) = CompositeGrid.LogDensedGrid(:uniform, [1.0 * kF, 16 * kF], [kF,], 4, 0.1 * kF, 4)
@@ -143,7 +143,7 @@ end
 
 function linear_interp(Gf, Fmesh, Kmesh, Fs, k)
     # println("GF: ", Gf)
-    if k>Kmesh[end]
+    if k > Kmesh[end]
         return zero(eltype(Gf.data))
     end
     # @assert Fs <maximum(Fmesh) "Fs $Fs is larger than maximum of Fmesh"
