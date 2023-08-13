@@ -192,6 +192,7 @@ function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
             println("_a = $_a, _b = $_b, _c = $_c, _b_deriv = $_b_deriv")
 
             Fs_Λ_new[ui] = -Rex(_Fs, k) + _a + _b * u_Λ[ui] + _b_deriv - _c
+            # Fs_Λ_new[ui] = -Rex(_Fs, k) + _a - _b * u_Λ[ui] - _b_deriv + _c
             # Fs_Λ_new[ui] = -Rex(_Fs, k) + _a
 
             para_new = UEG.ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs_Λ_new[ui], Fa=-0.0, isDynamic=true)
