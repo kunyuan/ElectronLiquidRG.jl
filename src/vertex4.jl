@@ -53,16 +53,37 @@ function vertex4_renormalize(para, filename, dz; Fs=fdict[para.rs], Λgrid=Spars
     # return z1
 end
 
-function c_coeff(para, kamp=para.kF, kamp2=para.kF)
+"""
+u*G0*G0*u ladder diagram. The (up, up, up, up) is zero and (up, up, down, down) is non-zero 
+"""
+function c_coeff_pp(para, kamp=para.kF, kamp2=para.kF)
     θgrid = CompositeGrid.LogDensedGrid(:gauss, [0.0, π], [0.0, π], 16, 0.001, 32)
     qs = [sqrt(kamp^2 + kamp2^2 - 2 * cos(θ) * kamp * kamp2) for θ in θgrid.grid]
 
-    Wp = zeros(Float64, length(qs))
+    Wp = zeros(ComplexF64, length(qs))
     for (qi, q) in enumerate(qs)
-        Wp[qi] = Polarization.Ladder0_FiniteTemp(q, 0, para)
+        Wp[qi] = ElectronGas.Polarization.Ladder0_FiniteTemp(q, 0, para)
     end
 
-    return Interp.integrate1D(Wp .* sin.(θgrid.grid), θgrid) / 2
+    vud = Interp.integrate1D(Wp .* sin.(θgrid.grid), θgrid) / 2 / para.NF
+    return 0, -real(vud)
+end
+
+"""
+u*Pi_0*u particle-hole exchange diagram. The (up, up, up, up) and (up, up, down, down) have the same weight
+"""
+function c_coeff_phe(para, kamp=para.kF, kamp2=para.kF)
+    θgrid = CompositeGrid.LogDensedGrid(:gauss, [0.0, π], [0.0, π], 16, 0.001, 32)
+    qs = [sqrt(kamp^2 + kamp2^2 - 2 * cos(θ) * kamp * kamp2) for θ in θgrid.grid]
+
+    Wp = zeros(ComplexF64, length(qs))
+    for (qi, q) in enumerate(qs)
+        Wp[qi] = ElectronGas.Polarization.Polarization0_FiniteTemp(q, 0, para)
+    end
+
+    vud = Interp.integrate1D(Wp .* sin.(θgrid.grid), θgrid) / 2 / para.NF
+    vuu = vud
+    return real(vuu), real(vud)
 end
 
 
