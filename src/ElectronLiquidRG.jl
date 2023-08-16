@@ -8,6 +8,7 @@ using Measurements
 using GreenFunc
 using FeynmanDiagram
 using FiniteDifferences
+using ElectronGas
 
 using LinearAlgebra
 using Lehmann
