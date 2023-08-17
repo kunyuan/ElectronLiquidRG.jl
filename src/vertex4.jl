@@ -54,7 +54,7 @@ function vertex4_renormalize(para, filename, dz; Fs=fdict[para.rs], Λgrid=Spars
 end
 
 """
-u*G0*G0*u ladder diagram. The (up, up, up, up) is zero and (up, up, down, down) is non-zero 
+-u*G0*G0*u + #Λ∞ ladder diagram subtracting the constant term. The (up, up, up, up) is zero and (up, up, down, down) is non-zero 
 """
 function c_coeff_pp(para, kamp=para.kF, kamp2=para.kF)
     θgrid = CompositeGrid.LogDensedGrid(:gauss, [0.0, π], [0.0, π], 16, 0.001, 32)
@@ -70,7 +70,18 @@ function c_coeff_pp(para, kamp=para.kF, kamp2=para.kF)
 end
 
 """
-u*Pi_0*u particle-hole exchange diagram. The (up, up, up, up) and (up, up, down, down) have the same weight
+u*Pi_0*u particle-hole exchange diagram. 
+1. (up, up, up, up): the internal bubble is spin down, and there is a Fermi loop contributing a minus sign
+2. (up, up, down, down): the internal bubble is up and down, and there is no closed Fermi loop, so there is no additional sign.
+
+For a reference of the diagram sign, according to ElectronLiquid.Ver4.MC_PH subroutine, for rs=1, mass=10.0, Yukawa interaction
+ # order                 upup          updown
+    1 (exchange)        0.152(1)        0.0 
+    2 (PHEr)            0.0088(1)    -0.0119(2)
+    2 (PPr)             0.002083     0.02198(42) 
+
+WARNING 1: Following the convention of the RG application, we need to add an additional minus to the above results.
+WARNING 2: The main contributions in the PPr diagrams are from the UV, so it should be compared with Λ∞ - uG0G0u where Λ∞ needs to be fitted.
 """
 function c_coeff_phe(para, kamp=para.kF, kamp2=para.kF)
     θgrid = CompositeGrid.LogDensedGrid(:gauss, [0.0, π], [0.0, π], 16, 0.001, 32)
@@ -83,7 +94,7 @@ function c_coeff_phe(para, kamp=para.kF, kamp2=para.kF)
 
     vud = Interp.integrate1D(Wp .* sin.(θgrid.grid), θgrid) / 2 / para.NF
     vuu = vud
-    return real(vuu), real(vud)
+    return real(vuu), -real(vud)
 end
 
 
