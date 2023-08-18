@@ -1,4 +1,5 @@
 #Particle-particle diagram
+# sign = (-1)^order = -1
 #
 # kamp,up   kamp2,down
 #   |--- u ---|
@@ -33,8 +34,8 @@ function _PP(vars, config)
     g3 = Spectral.kernelFermiT(t2 - t1, ek2, para.β)
 
     qd = sqrt(dot(q, q))
-    vq = -UEG.interactionStatic(para, qd, 0.0, t1)
-    wq = -UEG.interactionDynamic(para, qd, 0.0, t1)
+    vq = UEG.interactionStatic(para, qd, 0.0, t1)
+    wq = UEG.interactionDynamic(para, qd, 0.0, t1)
 
     # vq0 = -4π *para.e0^2 / (qd^2+para.mass2) /para.β 
     # @assert vq ≈ vq0 "vq=$vq, vq0=$vq0, qd=$qd, t1=$t1"
@@ -53,6 +54,8 @@ function _PP(vars, config)
 end
 
 # Left vertex correction with two external legs exchanged. Only (up, up; down, down) spin configuration will contribute.
+# sign = (-1)^order * (-1 external leg exchange) * (-1 u exchange) * (-1 KO exchange) = 1
+#
 #   kamp,up   kamp2,down
 #         \    /
 #            x 
@@ -64,7 +67,7 @@ end
 #       |    up /     | 
 #       |-- > -/      |
 #   kamp,up       kamp2,down
-function _LVer3(vars, config)
+function _Lver3(vars, config)
     varK, varT, varX, varN = vars
     R, Theta, Phi = varK
     para, kamp, kamp2 = config.userdata
@@ -89,8 +92,8 @@ function _LVer3(vars, config)
     g3 = Spectral.kernelFermiT(t1 - t2, ek2, para.β)
 
     qd = sqrt(dot(q, q))
-    vq = -UEG.interactionStatic(para, qd, 0.0, t1)
-    wq = -UEG.interactionDynamic(para, qd, 0.0, t1)
+    vq = UEG.interactionStatic(para, qd, 0.0, t1)
+    wq = UEG.interactionDynamic(para, qd, 0.0, t1)
 
     # vq0 = -4π *para.e0^2 / (qd^2+para.mass2) /para.β 
     # @assert vq ≈ vq0 "vq=$vq, vq0=$vq0, qd=$qd, t1=$t1"
@@ -109,6 +112,8 @@ function _LVer3(vars, config)
 end
 
 # Left bubble correction with two external legs exchanged. Only (up, up; up, up) spin configuration will contribute.
+# sign = (-1)^order * (-1 external leg exchange) * (-1 fermionic bubble) = -1
+#
 #   kamp,up    kamp2,up
 #         \     /
 #            x 
@@ -146,8 +151,8 @@ function _Lbubble(vars, config)
 
     qt = k1 - k2
     qd = sqrt(dot(qt, qt))
-    vq = -UEG.interactionStatic(para, qd, 0.0, t1)
-    wq = -UEG.interactionDynamic(para, qd, 0.0, t1)
+    vq = UEG.interactionStatic(para, qd, 0.0, t1)
+    wq = UEG.interactionDynamic(para, qd, 0.0, t1)
 
     # vq0 = -4π *para.e0^2 / (qd^2+para.mass2) /para.β 
     # @assert vq ≈ vq0 "vq=$vq, vq0=$vq0, qd=$qd, t1=$t1"
