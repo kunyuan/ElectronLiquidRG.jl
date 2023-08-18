@@ -1,4 +1,14 @@
+"""
+Particle-particle diagram
 
+  kamp,up   kamp2,down
+    |--- u ---|
+    |         |
+  up^         ^down
+    |         |
+    |-- KO ---|
+kamp,up  kamp2,down
+"""
 function _PP(vars, config)
     varK, varT, varX, varN = vars
     R, Theta, Phi = varK
@@ -10,7 +20,7 @@ function _PP(vars, config)
     x = varX[1]
     ki = varN[1]
     kl, kr = kamp[ki], kamp2[ki]
-    
+
 
     q = [r * sin(θ) * cos(ϕ), r * sin(θ) * sin(ϕ), r * cos(θ)]
 
@@ -37,10 +47,71 @@ function _PP(vars, config)
     phase_d = phase((0.0, t2, t1, t2), -1, 0, 0, para.β)
 
     factor = r^2 * sin(θ) / (1 - R[1])^2 / (2π)^3 * para.NF
-    factor/=2 # angle average with l=0
+    factor /= 2 # angle average with l=0
 
     # wud = g1 * (g2 * vq + g3 * wq) * factor * phase((0.0, t2, t1, t2), -1, 0, 0, para.β)
-    wud = g1 * (g2 * vq *phase_s + g3 * wq*phase_d) * factor 
+    wud = g1 * (g2 * vq * phase_s + g3 * wq * phase_d) * factor
+    return wud
+end
+
+"""
+Left vertex correction with two external legs exchanged. Only (up, up; down, down) spin configuration will contribute.
+
+left vertex correction diagram:
+ 
+    kamp,up   kamp2,up
+          \    /
+             x 
+          /    \
+        /        \
+        |-- < -\   \
+        |       \    \
+        KO      |- u -|
+        |       /     | 
+        |-- > -/      |
+    kamp,up       kamp2,down
+"""
+function _LVer3(vars, config)
+    varK, varT, varX, varN = vars
+    R, Theta, Phi = varK
+    para, kamp, kamp2 = config.userdata
+
+    t1, t2 = varT[2], varT[3]
+    r = R[1] / (1 - R[1])
+    θ, ϕ = Theta[1], Phi[1]
+    x = varX[1]
+    ki = varN[1]
+    kl, kr = kamp[ki], kamp2[ki]
+
+    q = [r * sin(θ) * cos(ϕ), r * sin(θ) * sin(ϕ), r * cos(θ)]
+
+    k1 = [kl + q[1], q[2], q[3]]
+    k2 = [kr * x - q[1], kr * sqrt(1 - x^2) - q[2], -q[3]]
+
+    ek1 = (dot(k1, k1) - para.kF^2) / 2 / para.me
+    ek2 = (dot(k2, k2) - para.kF^2) / 2 / para.me
+
+    g1 = Spectral.kernelFermiT(t2, ek1, para.β)
+    g2 = Spectral.kernelFermiT(t2, ek2, para.β)
+    g3 = Spectral.kernelFermiT(t2 - t1, ek2, para.β)
+
+    qd = sqrt(dot(q, q))
+    vq = -UEG.interactionStatic(para, qd, 0.0, t1)
+    wq = -UEG.interactionDynamic(para, qd, 0.0, t1)
+
+    # vq0 = -4π *para.e0^2 / (qd^2+para.mass2) /para.β 
+    # @assert vq ≈ vq0 "vq=$vq, vq0=$vq0, qd=$qd, t1=$t1"
+    # wq = 0.0
+    # println(t1)
+
+    phase_s = phase((0.0, t2, 0.0, t2), -1, 0, 0, para.β)
+    phase_d = phase((0.0, t2, t1, t2), -1, 0, 0, para.β)
+
+    factor = r^2 * sin(θ) / (1 - R[1])^2 / (2π)^3 * para.NF
+    factor /= 2 # angle average with l=0
+
+    # wud = g1 * (g2 * vq + g3 * wq) * factor * phase((0.0, t2, t1, t2), -1, 0, 0, para.β)
+    wud = g1 * (g2 * vq * phase_s + g3 * wq * phase_d) * factor
     return wud
 end
 
@@ -67,12 +138,12 @@ In the large kamp limit, with kamp2 =0, it approaches to -m*e^2*NF*pi/2/kamp
 """
 function vertex3(para::ParaMC;
     neval=1e6, #number of evaluations
-    kamp=[para.kF, ],
+    kamp=[para.kF,],
     kamp2=[para.kF for i in 1:length(kamp)],
     config=nothing,
     print=0,
     integrand=_PP,
-    filename = nothing,
+    filename=nothing,
     kwargs...
 )
 
@@ -94,7 +165,7 @@ function vertex3(para::ParaMC;
         config = MCIntegration.Configuration(
             var=(K, T, X, N),
             dof=dof,
-            obs = obs,
+            obs=obs,
             type=ComplexF64,
             userdata=(para, kamp, kamp2),
             kwargs...
@@ -102,7 +173,7 @@ function vertex3(para::ParaMC;
     end
 
     result = integrate(integrand;
-        measure = _measure_ver3,
+        measure=_measure_ver3,
         config=config, neval=neval, print=print, solver=:vegasmc, kwargs...)
 
     if isnothing(result) == false
