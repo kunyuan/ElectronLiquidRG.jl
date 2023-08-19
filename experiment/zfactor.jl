@@ -36,19 +36,32 @@ function get_z()
 end
 
 function get_ver3()
-    para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order + 1)
-    f = jldopen("data/ver3.jld2", "r")
+    para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order)
+    f_pp = jldopen("data/ver3_PP.jld2", "r")
+    f_phe = jldopen("data/ver3_PHE.jld2", "r")
+    f_ph = jldopen("data/ver3_PH.jld2", "r")
     # z1 = zeros(Measurement{Float64}, length(Fs), length(Λgrid))
-    ver3 = MeshArray(Fs, sparseΛgrid; dtype=Complex{Measurement{Float64}})
+    ver3_pp = MeshArray(Fs, sparseΛgrid; dtype=Complex{Measurement{Float64}})
+    ver3_phe = MeshArray(Fs, sparseΛgrid; dtype=Complex{Measurement{Float64}})
+    ver3_ph = MeshArray(Fs, sparseΛgrid; dtype=Complex{Measurement{Float64}})
 
     for (fi, F) in enumerate(Fs)
         _para = RG.get_para(para, F)
         key = UEG.short(_para)
-        kgrid, _ver3 = f[key]
-        ver3[fi, :] = _ver3
+        kgrid, _ver3 = f_pp[key]
+        ver3_pp[fi, :] = _ver3
+        @assert kgrid ≈ sparseΛgrid
+
+        kgrid, _ver3 = f_phe[key]
+        ver3_phe[fi, :] = _ver3
+        @assert kgrid ≈ sparseΛgrid
+
+        kgrid, _ver3 = f_ph[key]
+        ver3_ph[fi, :] = _ver3
         @assert kgrid ≈ sparseΛgrid
     end
-    return ver3
+
+    return ver3_pp, ver3_phe, ver3_ph
 end
 
 function get_ver4(dz, dz2)
@@ -254,8 +267,16 @@ end
 
 dz = get_z()
 dz2 = [dz[1] for i in 1:length(dz)] # right leg is fixed to the Fermi surface 
-ver3 = get_ver3()
-print_ver3(ver3; nsample=10)
+ver3_pp, ver3_phe, ver3_ph = get_ver3()
+println("PP channel")
+print_ver3(ver3_pp; nsample=10)
+println("PHE channel")
+print_ver3(ver3_phe; nsample=10)
+println("PH channel")
+print_ver3(ver3_ph; nsample=10)
+
+ver3 = ver3_pp + ver3_phe + ver3_ph
+
 vuu, vud = get_ver4(dz, dz2)
 print_ver4(vuu, vud, 1; nsample=10)
 print_ver4(vuu, vud, 2; nsample=10)
