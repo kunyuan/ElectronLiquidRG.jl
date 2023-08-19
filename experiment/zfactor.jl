@@ -51,11 +51,11 @@ function get_ver3()
     return ver3
 end
 
-function get_ver4(dz)
+function get_ver4(dz, dz2)
 
     _para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order + 1)
 
-    vuu, vud = RG.vertex4_renormalize(_para, "data/ver4.jld2", dz; Fs=Fs, Λgrid=sparseΛgrid)
+    vuu, vud = RG.vertex4_renormalize(_para, "data/ver4.jld2", dz, dz2; Fs=Fs, Λgrid=sparseΛgrid)
 
     return vuu, vud
 end
@@ -253,9 +253,10 @@ function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
 end
 
 dz = get_z()
+dz2 = [dz[1] for i in 1:length(dz)] # right leg is fixed to the Fermi surface 
 ver3 = get_ver3()
 print_ver3(ver3; nsample=10)
-vuu, vud = get_ver4(dz)
+vuu, vud = get_ver4(dz, dz2)
 print_ver4(vuu, vud, 1; nsample=10)
 print_ver4(vuu, vud, 2; nsample=10)
 print_ver4(vuu, vud, 3; nsample=10)

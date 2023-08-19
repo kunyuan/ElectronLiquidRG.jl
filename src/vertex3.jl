@@ -66,6 +66,7 @@ end
 #       KO      |- u -|
 #       |    up /     | 
 #       |-- > -/      |
+#       |             |
 #   kamp,up       kamp2,down
 function _Lver3(vars, config)
     varK, varT, varX, varN = vars
@@ -102,6 +103,63 @@ function _Lver3(vars, config)
 
     phase_s = phase((0.0, t2, t2, 0.0), -1, 0, 0, para.β)
     phase_d = phase((0.0, t2, t2, t1), -1, 0, 0, para.β)
+
+    factor = r^2 * sin(θ) / (1 - R[1])^2 / (2π)^3 * para.NF
+    factor /= 2 # angle average with l=0
+
+    # wud = g1 * (g2 * vq + g3 * wq) * factor * phase((0.0, t2, t1, t2), -1, 0, 0, para.β)
+    wud = g1 * (g2 * vq * phase_s + g3 * wq * phase_d) * factor
+    return wud
+end
+
+# Left vertex correction with two external legs exchanged. Only (up, up; down, down) spin configuration will contribute.
+# sign = (-1)^order * (-1 KO exchange) = 1
+#
+#   kamp,up       kamp2,down
+#       |             |
+#       |-- < -\      |
+#       |  down \     |
+#       KO      |- u -|
+#       |  down /     | 
+#       |-- > -/      |
+#       |             |
+#   kamp,up       kamp2,down
+function _Lver3_direct(vars, config)
+    varK, varT, varX, varN = vars
+    R, Theta, Phi = varK
+    para, kamp, kamp2 = config.userdata
+
+    t1, t2 = varT[2], varT[3]
+    r = R[1] / (1 - R[1])
+    θ, ϕ = Theta[1], Phi[1]
+    x = varX[1]
+    ki = varN[1]
+    kl, kr = kamp[ki], kamp2[ki]
+
+    q = [r * sin(θ) * cos(ϕ), r * sin(θ) * sin(ϕ), r * cos(θ)]
+
+    k1 = [kl + q[1], q[2], q[3]]
+    # k2 = [kr * x + q[1], kr * sqrt(1 - x^2) + q[2], +q[3]]
+    k2 = k1
+
+    ek1 = (dot(k1, k1) - para.kF^2) / 2 / para.me
+    ek2 = (dot(k2, k2) - para.kF^2) / 2 / para.me
+
+    g1 = Spectral.kernelFermiT(t2, ek1, para.β)
+    g2 = Spectral.kernelFermiT(-t2, ek2, para.β)
+    g3 = Spectral.kernelFermiT(t1 - t2, ek2, para.β)
+
+    qd = sqrt(dot(q, q))
+    vq = UEG.interactionStatic(para, qd, 0.0, t1)
+    wq = UEG.interactionDynamic(para, qd, 0.0, t1)
+
+    # vq0 = -4π *para.e0^2 / (qd^2+para.mass2) /para.β 
+    # @assert vq ≈ vq0 "vq=$vq, vq0=$vq0, qd=$qd, t1=$t1"
+    # wq = 0.0
+    # println(t1)
+
+    phase_s = phase((0.0, 0.0, t2, t2), -1, 0, 0, para.β)
+    phase_d = phase((0.0, t1, t2, t2), -1, 0, 0, para.β)
 
     factor = r^2 * sin(θ) / (1 - R[1])^2 / (2π)^3 * para.NF
     factor /= 2 # angle average with l=0
@@ -166,7 +224,7 @@ function _Lbubble(vars, config)
     factor /= 2 # angle average with l=0
 
     # wud = g1 * (g2 * vq + g3 * wq) * factor * phase((0.0, t2, t1, t2), -1, 0, 0, para.β)
-    wud = g1 * (g2 * vq * phase_s + g3 * wq * phase_d) * factor
+    wud = -g1 * (g2 * vq * phase_s + g3 * wq * phase_d) * factor
     return wud
 end
 

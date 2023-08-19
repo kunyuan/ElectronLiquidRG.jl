@@ -5,7 +5,7 @@ function vertex4(para; neval=1e6, Λgrid=Λgrid(para.kF), n=[-1, 0, 0, -1], l=[0
     return ver4, result
 end
 
-function vertex4_renormalize(para, filename, dz; Fs=fdict[para.rs], Λgrid=SparseΛgrid(para.kF))
+function vertex4_renormalize(para, filename, dz, dz2=dz; Fs=fdict[para.rs], Λgrid=SparseΛgrid(para.kF))
     # println("read Fs = $Fs from $filename")
     kF = para.kF
     f = jldopen(filename, "r")
@@ -35,10 +35,12 @@ function vertex4_renormalize(para, filename, dz; Fs=fdict[para.rs], Λgrid=Spars
     end
 
     vuu = CounterTerm.mergeInteraction(vuu)
-    vuu = CounterTerm.z_renormalization(para.order, vuu, dz, 2)
+    vuu = CounterTerm.z_renormalization(para.order, vuu, dz, 1) #left leg renormalization
+    vuu = CounterTerm.z_renormalization(para.order, vuu, dz2, 1) #right leg renormalization
 
     vud = CounterTerm.mergeInteraction(vud)
-    vud = CounterTerm.z_renormalization(para.order, vud, dz, 2)
+    vud = CounterTerm.z_renormalization(para.order, vud, dz, 1) #left leg renormalization
+    vud = CounterTerm.z_renormalization(para.order, vud, dz2, 1) #right leg renormalization
 
     vuu = [vuu[(o, 0)] for o in 1:para.order]
     vud = [vud[(o, 0)] for o in 1:para.order]
