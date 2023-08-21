@@ -147,26 +147,103 @@ py"""
 import numpy as np
 from scipy.interpolate import UnivariateSpline
 
-def compute_derivative(x, y, s = None):
+def compute_derivative(x, y, finegrid, s = None):
     # Fit a smoothing spline
     spline = UnivariateSpline(x, y, k=3, s=s)
     
     # Compute the derivative
-    y_prime = spline.derivative()(x)
+    y_prime = spline.derivative()(finegrid)
     
-    return spline(x), y_prime
+    return spline(finegrid), y_prime
 """
 
 # Create a Python function reference in Julia
 compute_derivative = pyimport("__main__").compute_derivative
 
-function plot_fit(Λgrid, Fs_Λ, smoothed, dFs_Λ)
-    p1 = plot(Λgrid ./ para.kF, Fs_Λ, xlims=[1.0, 5.0], seriestype=[:scatter, :path], linestyle=:dash, mark=:dot, label="Noisy Data", title="Noisy Data")
-    plot!(p1, Λgrid ./ para.kF, smoothed, label="smoothed Data", title="smoothed Data")
-    p2 = plot(Λgrid ./ para.kF, dFs_Λ, xlims=[1.0, 5.0], seriestype=[:scatter, :path], linestyle=:dash, mark=:dot, label="Derived Data", title="Derivative", color=:red)
+function plot_fit(Λgrid, finegrid, Fs_Λ, smoothed, dFs_Λ)
+    p1 = plot(Λgrid ./ para.kF, Fs_Λ, xlims=[1.0, 10.0], seriestype=[:scatter, :path], linestyle=:dash, mark=:dot, label="Noisy Data", title="Noisy Data")
+    plot!(p1, finegrid ./ para.kF, smoothed, label="smoothed Data", title="smoothed Data")
+    p2 = plot(finegrid ./ para.kF, dFs_Λ, xlims=[1.0, 10.0], seriestype=[:scatter, :path], linestyle=:dash, mark=:dot, label="Derived Data", title="Derivative", color=:red)
     p = plot(p1, p2, layout=(1, 2), size=(800, 400))
     display(p)
     readline()
+end
+
+function b_tail(k)
+    factor = para.NF / 2 * 4
+    B = -π * para.me * para.e0^2 / 2 * factor
+    return B / k, -B / k^2
+end
+
+function a_on_fine_grid(a)
+    Fmesh = SimpleG.Arbitrary{Float64}(a.mesh[1])
+    kgrid = a.mesh[2]
+    finekgrid = Λgrid
+
+    interp_a(Fs::Float64, k::Float64, ver) = RG.linear_interp(ver, Fmesh, kgrid, Fs, k)
+
+    a_fine = MeshArray(b.mesh[1], finekgrid; dtype=Measurement{Float64})
+    for fi in eachindex(Fmesh)
+        # take derivation of kgrid
+        for ki in eachindex(finekgrid)
+            if finekgrid[ki] >= kgrid[end]
+                a_fine[fi, ki] = 0.0
+            else
+                a_fine[fi, ki] = interp_a(Fmesh[fi], finekgrid[ki], a)
+                # b2 = interp_b(Fmesh[fi], finekgrid[ki+1], b)
+                # b_deriv[fi, ki] = (b1.val - b2.val) / (finekgrid[ki] - finekgrid[ki+1])
+            end
+        end
+    end
+    return a_fine
+end
+
+function b_on_fine_grid(b)
+
+    Fmesh = SimpleG.Arbitrary{Float64}(b.mesh[1])
+    kgrid = b.mesh[2]
+    finekgrid = Λgrid
+    # finekgrid = kgrid
+    # finekgrid = CompositeGrid.LogDensedGrid(:gauss, [1.0 * para.kF, 100 * para.kF], [para.kF,], 8, 0.2 * para.kF, 8)
+
+    interp_b(Fs::Float64, k::Float64, ver3) = RG.linear_interp(ver3, Fmesh, kgrid, Fs, k)
+
+
+    # b_deriv = similar(b)
+    b_fine = MeshArray(b.mesh[1], finekgrid; dtype=Measurement{Float64})
+    b_deriv = MeshArray(b.mesh[1], finekgrid; dtype=Measurement{Float64})
+    for fi in eachindex(Fmesh)
+        bΛ = b[fi, :]
+        w = [bΛ[ki].err for (ki, k) in enumerate(kgrid)]
+        data = [d.val for d in bΛ]
+        smoothed, db = compute_derivative(kgrid.grid, data, finekgrid, s=(maximum(w))^2 * 2)
+        # plot_fit(kgrid, finekgrid, bΛ, smoothed, b_deriv[fi, :])
+
+        # take derivation of kgrid
+        for ki in eachindex(finekgrid)
+            if ki >= length(finekgrid) || finekgrid[ki] >= kgrid[end]
+                b_fine[fi, ki], b_deriv[fi, ki] = b_tail(finekgrid[ki])[2]
+            else
+                b_deriv[fi, ki] = db[ki]
+                b_fine[fi, ki] = smoothed[ki]
+                # b1 = interp_b(Fmesh[fi], finekgrid[ki], b)
+                # b2 = interp_b(Fmesh[fi], finekgrid[ki+1], b)
+                # b_deriv[fi, ki] = (b1.val - b2.val) / (finekgrid[ki] - finekgrid[ki+1])
+            end
+        end
+    end
+
+    for fi in eachindex(Fmesh)
+        test = [-Interp.integrate1D(b_deriv[fi, :], finekgrid, [kgrid[i], finekgrid[end]]) + b_tail(finekgrid[end])[1] for i in 1:length(kgrid)]
+        # test = test ./ kgrid
+
+        println("k/kF     dvs     dvs_fitted     test: ", Fmesh[fi])
+        for (ki, k) in enumerate(kgrid)
+            println("$(k / para.kF)    $(b_deriv[fi, ki]) $(b_tail(k)[2])   $(b[fi, ki])     $(test[ki])")
+        end
+    end
+
+    return b_fine, b_deriv
 end
 
 function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
@@ -250,7 +327,7 @@ function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
         end
 
         println(Fs_Λ_new[1], ", ", u_Λ_new[1])
-        exit(0)
+        # exit(0)
 
         u_Λ .= u_Λ * mix .+ u_Λ_new * (1 - mix)
         Fs_Λ .= Fs_Λ * mix .+ Fs_Λ_new * (1 - mix)
@@ -260,7 +337,7 @@ function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
     w = [a(Fs_Λ[ki], k, vs2).err for (ki, k) in enumerate(Λgrid)]
     smoothed, dFs_Λ_new = compute_derivative(Λgrid, Fs_Λ, s=(maximum(w))^2 * 2)
 
-    plot_fit(Λgrid, Fs_Λ, smoothed, dFs_Λ)
+    # plot_fit(Λgrid, Fs_Λ, smoothed, dFs_Λ)
     dFs_Λ .= dFs_Λ * mix .+ dFs_Λ_new * (1 - mix)
     # exit(0)
 
@@ -280,6 +357,7 @@ function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
         dFs_Λ_new = zeros(length(Λgrid))
 
         b_Λ = [b(Fs_Λ[ki], k, ver3).val for (ki, k) in enumerate(Λgrid)]
+        println("b: ", b_Λ[1])
         for ui in eachindex(Λgrid)
             k = Λgrid[ui]
 
@@ -292,7 +370,8 @@ function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
             # println("_a = $_a, _b = $_b, _c = $_c, _b_deriv = $_b_deriv")
 
             # Fs_Λ_new[ui] = -Rex(_Fs, k) + _a + _b * u_Λ[ui] + _b_deriv - _c
-            Fs_Λ_new[ui] = -Rex(_Fs, k) + _a + _b * u_Λ[ui] + _b_deriv
+            # Fs_Λ_new[ui] = -Rex(_Fs, k) + _a + _b * u_Λ[ui] + _b_deriv
+            Fs_Λ_new[ui] = -Rex(_Fs, k) + _a + _b * u_Λ[ui]
             # Fs_Λ_new[ui] = -Rex(_Fs, k)
             # Fs_Λ_new[ui] = -Rex(_Fs, k) + _a - _b * u_Λ[ui] - _b_deriv + _c
             # Fs_Λ_new[ui] = -Rex(_Fs, k) + _a
@@ -369,11 +448,19 @@ print_ver3(ver3_ph; nsample=10)
 
 ver3 = ver3_pp + ver3_phe + ver3_ph
 
+b = -real.(ver3) / 2.0 #ver3 only has up, up, down, down spin configuration, project to spin symmetric channel
+b = b .* 2 .* 2 # uGGR + RGGu contributes factor of 2, then u definition contributes another factor of 2
+
+b_fine, b_deriv = b_on_fine_grid(b)
+
 vuu, vud = get_ver4(dz, dz2)
 print_ver4(vuu, vud, 1; nsample=10)
 print_ver4(vuu, vud, 2; nsample=10)
 print_ver4(vuu, vud, 3; nsample=10)
 print_ver4(vuu, vud; nsample=10)
+
+# vs, vs_deriv = a_derivative(vuu, vud)
+
 
 _u, _Fs, _du = solve_RG(vuu, vud, ver3)
 println(_Fs[1])
