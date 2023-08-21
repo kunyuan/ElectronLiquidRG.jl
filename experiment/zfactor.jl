@@ -222,7 +222,7 @@ function b_on_fine_grid(b)
         # take derivation of kgrid
         for ki in eachindex(finekgrid)
             if ki >= length(finekgrid) || finekgrid[ki] >= kgrid[end]
-                b_fine[fi, ki], b_deriv[fi, ki] = b_tail(finekgrid[ki])[2]
+                b_fine[fi, ki], b_deriv[fi, ki] = b_tail(finekgrid[ki])
             else
                 b_deriv[fi, ki] = db[ki]
                 b_fine[fi, ki] = smoothed[ki]
@@ -244,6 +244,31 @@ function b_on_fine_grid(b)
     end
 
     return b_fine, b_deriv
+end
+
+function c_on_fine_grid(a)
+
+    Fmesh = SimpleG.Arbitrary{Float64}(a.mesh[1])
+    kgrid = a.mesh[2]
+    finekgrid = Λgrid
+    c_deriv = MeshArray(a.mesh[1], finekgrid; dtype=Measurement{Float64})
+
+    for ki in eachindex(finekgrid)
+        if finekgrid[ki] >= kgrid[end]
+            c_deriv[:, ki] .= para.me / 8 / π
+        else
+            c1 = RG.c_coeff_pp(para, finekgrid[ki] + para.kF * 0.01, para.kF)[2]
+            c2 = RG.c_coeff_pp(para, finekgrid[ki], para.kF)[2]
+            c_deriv[:, ki] .= (c1 - c2) / (0.01 * para.kF)
+            # b2 = interp_b(Fmesh[fi], finekgrid[ki+1], b)
+            # b_deriv[fi, ki] = (b1.val - b2.val) / (finekgrid[ki] - finekgrid[ki+1])
+        end
+    end
+
+    println("c_deriv")
+    println(c_deriv[1, :])
+
+    return c_deriv
 end
 
 function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
@@ -451,7 +476,11 @@ ver3 = ver3_pp + ver3_phe + ver3_ph
 b = -real.(ver3) / 2.0 #ver3 only has up, up, down, down spin configuration, project to spin symmetric channel
 b = b .* 2 .* 2 # uGGR + RGGu contributes factor of 2, then u definition contributes another factor of 2
 
+b = b / para.NF
+
 b_fine, b_deriv = b_on_fine_grid(b)
+
+c_deriv = c_on_fine_grid(b)
 
 vuu, vud = get_ver4(dz, dz2)
 print_ver4(vuu, vud, 1; nsample=10)
@@ -460,6 +489,10 @@ print_ver4(vuu, vud, 3; nsample=10)
 print_ver4(vuu, vud; nsample=10)
 
 # vs, vs_deriv = a_derivative(vuu, vud)
+
+vs = -real.((vuu + vud)) / 2.0 # -Gamma4 (multi-loop Feynman diagrams are for -Gamma4)
+vs = vs .* 2.0 # u definition has a factor of 2
+a_fine = a_on_fine_grid(vs)
 
 
 _u, _Fs, _du = solve_RG(vuu, vud, ver3)

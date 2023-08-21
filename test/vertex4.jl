@@ -3,7 +3,7 @@
     k = 20.0 * para.kF
 
     c_pp = ElectronLiquidRG.c_coeff_pp(para, k, para.kF)[2]
-    expect = para.me / 8 / π * k / para.NF
+    expect = para.me / 8 / π * k
     println(c_pp, " vs ", expect)
     @test abs(real(c_pp) - expect) / expect < 1e-2
 

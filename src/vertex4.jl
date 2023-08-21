@@ -67,7 +67,7 @@ function c_coeff_pp(para, kamp=para.kF, kamp2=para.kF)
         Wp[qi] = ElectronGas.Polarization.Ladder0_FiniteTemp(q, 0, para)
     end
 
-    vud = Interp.integrate1D(Wp .* sin.(θgrid.grid), θgrid) / 2 / para.NF
+    vud = Interp.integrate1D(Wp .* sin.(θgrid.grid), θgrid) / 2
     return 0, -real(vud)
 end
 
@@ -94,7 +94,7 @@ function c_coeff_phe(para, kamp=para.kF, kamp2=para.kF)
         Wp[qi] = ElectronGas.Polarization.Polarization0_FiniteTemp(q, 0, para)
     end
 
-    vud = Interp.integrate1D(Wp .* sin.(θgrid.grid), θgrid) / 2 / para.NF
+    vud = Interp.integrate1D(Wp .* sin.(θgrid.grid), θgrid) / 2
     vuu = vud
     return real(vuu), -real(vud)
 end
