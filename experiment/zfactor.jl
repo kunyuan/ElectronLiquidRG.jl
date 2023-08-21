@@ -17,7 +17,7 @@ const order = 1
 const para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order + 1)
 
 # const Fs = RG.fdict[para.rs]
-const Fs = [0.0, -0.1, -0.2, -0.3]
+const Fs = [-0.3, -0.2, -0.1, 0.0] #must be in increasing order
 # const Λgrid = RG.Λgrid(para.kF)
 const Λgrid = CompositeGrid.LogDensedGrid(:gauss, [1.0 * para.kF, 100 * para.kF], [para.kF,], 8, 0.2 * para.kF, 4)
 const sparseΛgrid = RG.SparseΛgrid(para.kF)
@@ -186,7 +186,11 @@ function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
     ver3 = -real.(ver3) / 2.0 # -Gamma3 (because the direct interaction is negative)
     # println(" vs : ", vs)
     # println(" ver3 : ", ver3)
-    println(vs2[end, 1])
+    println(size(vs2))
+    println(Fmesh)
+    for i in eachindex(Fmesh)
+        println(vs2.mesh[1][i], " -> ", vs2[i, 1])
+    end
     println(a(-0.1, para.kF, vs2))
 
     c = para.me / 8 / π / para.NF # ~0.2 for rs=1
@@ -209,6 +213,66 @@ function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
 
     u_Λ = zeros(length(Λgrid))
     du_Λ = zeros(length(Λgrid))
+
+    println("Step 1: solve for without b and c")
+
+    for i in 1:max_iter
+        Fs_Λ_new = zeros(length(Λgrid))
+        u_Λ_new = zeros(length(Λgrid))
+
+        for ui in eachindex(Λgrid)
+            k = Λgrid[ui]
+
+            _u = u_Λ[ui]
+            _Fs = Fs_Λ[ui]
+            _a = a(_Fs, k, vs2).val
+
+            Fs_Λ_new[ui] = -Rex(_Fs, k) + _a
+            # Fs_Λ_new[ui] = -Rex(_Fs, k)
+            # Fs_Λ_new[ui] = -Rex(_Fs, k) + _a - _b * u_Λ[ui] - _b_deriv + _c
+            # Fs_Λ_new[ui] = -Rex(_Fs, k) + _a
+
+            para_new = UEG.ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs_Λ_new[ui], Fa=-0.0, isDynamic=true)
+            u_Λ_new[ui] = RG.u_from_f(para_new, k, para.kF)[1]
+        end
+        diff_u = maximum(abs.(u_Λ_new - u_Λ))
+        diff_Fs = maximum(abs.(Fs_Λ_new - Fs_Λ))
+        println("iter $i, diff_u = $diff_u, diff_Fs = $diff_Fs")
+        # for li in eachindex(Λgrid)
+        #     # println(Λgrid[li]/para.kF, " : ", Fs_Λ[li], " -> ", Fs_Λ_new[li], " = diff ", Fs_Λ_new[li]-Fs_Λ[li], " with ", vs2[end, li])
+        #     println(Λgrid[li] / para.kF, " : ", Fs_Λ[li], " -> ", Fs_Λ_new[li], " = diff ", Fs_Λ_new[li] - Fs_Λ[li], " with ", a(Fs_Λ_new[li], Λgrid[li], vs2))
+        # end
+        # println("before: ", Fs_Λ)
+        # println("after: ", Fs_Λ_new)
+        # println("diff: ", Fs_Λ_new-Fs_Λ)
+        if diff_Fs / maximum(abs.(Fs_Λ)) < 1e-4
+            break
+        end
+
+        println(Fs_Λ_new[1], ", ", u_Λ_new[1])
+        exit(0)
+
+        u_Λ .= u_Λ * mix .+ u_Λ_new * (1 - mix)
+        Fs_Λ .= Fs_Λ * mix .+ Fs_Λ_new * (1 - mix)
+
+    end
+
+    w = [a(Fs_Λ[ki], k, vs2).err for (ki, k) in enumerate(Λgrid)]
+    smoothed, dFs_Λ_new = compute_derivative(Λgrid, Fs_Λ, s=(maximum(w))^2 * 2)
+
+    plot_fit(Λgrid, Fs_Λ, smoothed, dFs_Λ)
+    dFs_Λ .= dFs_Λ * mix .+ dFs_Λ_new * (1 - mix)
+    # exit(0)
+
+    para_Λ = [UEG.ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs_Λ[ui], Fa=-0.0, isDynamic=true) for ui in eachindex(Λgrid)]
+    ∂R_∂Λ = [RG.∂R_∂Λ_exchange(para_Λ[i], k, para.kF) for (i, k) in enumerate(Λgrid)]
+    ∂R_∂F = [RG.∂R_∂F_exchange(para_Λ[i], k, para.kF) for (i, k) in enumerate(Λgrid)]
+    du_Λ = [(1 + ∂R_∂F[i]) * dFs_Λ[i] + ∂R_∂Λ[i] for i in eachindex(Λgrid)]
+
+    println(Fs_Λ[1], ", ", u_Λ[1])
+
+    # exit(0)
+    println("Step 2: solve for u(Λ)")
 
     for i in 1:max_iter
         Fs_Λ_new = zeros(length(Λgrid))
@@ -255,14 +319,14 @@ function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
         w = [a(Fs_Λ[ki], k, vs2).err for (ki, k) in enumerate(Λgrid)]
         smoothed, dFs_Λ_new = compute_derivative(Λgrid, Fs_Λ, s=(maximum(w))^2 * 2)
 
-        plot_fit(Λgrid, Fs_Λ, smoothed, dFs_Λ_new)
-        dFs_Λ .= dFs_Λ * mix .+ dFs_Λ_new * (1 - mix)
+        # plot_fit(Λgrid, Fs_Λ, smoothed, dFs_Λ_new)
+        # dFs_Λ .= dFs_Λ * mix .+ dFs_Λ_new * (1 - mix)
         # exit(0)
 
-        para_Λ = [UEG.ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs_Λ[ui], Fa=-0.0, isDynamic=true) for ui in eachindex(Λgrid)]
-        ∂R_∂Λ = [RG.∂R_∂Λ_exchange(para_Λ[i], k, para.kF) for (i, k) in enumerate(Λgrid)]
-        ∂R_∂F = [RG.∂R_∂F_exchange(para_Λ[i], k, para.kF) for (i, k) in enumerate(Λgrid)]
-        du_Λ = [(1 + ∂R_∂F[i]) * dFs_Λ[i] + ∂R_∂Λ[i] for i in eachindex(Λgrid)]
+        # para_Λ = [UEG.ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs_Λ[ui], Fa=-0.0, isDynamic=true) for ui in eachindex(Λgrid)]
+        # ∂R_∂Λ = [RG.∂R_∂Λ_exchange(para_Λ[i], k, para.kF) for (i, k) in enumerate(Λgrid)]
+        # ∂R_∂F = [RG.∂R_∂F_exchange(para_Λ[i], k, para.kF) for (i, k) in enumerate(Λgrid)]
+        # du_Λ = [(1 + ∂R_∂F[i]) * dFs_Λ[i] + ∂R_∂Λ[i] for i in eachindex(Λgrid)]
     end
 
 

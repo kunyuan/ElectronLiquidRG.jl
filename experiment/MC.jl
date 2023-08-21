@@ -14,7 +14,7 @@ isFock = false
 
 for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
     # for _F in ElectronLiquidRG.fdict[_rs]
-    for _F in [0.0, -0.1, -0.2, -0.3]
+    for _F in [-0.3, -0.2, -0.1, 0.0]
         # for _F in [0.0, ]
         para = UEG.ParaMC(rs=_rs, beta=_beta, Fs=_F, order=_order, mass2=_mass2, isDynamic=isDynamic, dim=dim, isFock=isFock)
         kF = para.kF
