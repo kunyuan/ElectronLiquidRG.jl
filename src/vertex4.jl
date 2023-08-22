@@ -35,12 +35,12 @@ function vertex4_renormalize(para, filename, dz, dz2=dz; Fs=fdict[para.rs], Λgr
     end
 
     vuu = CounterTerm.mergeInteraction(vuu)
-    vuu = CounterTerm.z_renormalization(para.order, vuu, dz, 1) #left leg renormalization
-    vuu = CounterTerm.z_renormalization(para.order, vuu, dz2, 1) #right leg renormalization
+    vuu = CounterTerm.z_renormalization(para.order, vuu, dz, 2) #left leg renormalization
+    # vuu = CounterTerm.z_renormalization(para.order, vuu, dz2, 1) #right leg renormalization
 
     vud = CounterTerm.mergeInteraction(vud)
-    vud = CounterTerm.z_renormalization(para.order, vud, dz, 1) #left leg renormalization
-    vud = CounterTerm.z_renormalization(para.order, vud, dz2, 1) #right leg renormalization
+    vud = CounterTerm.z_renormalization(para.order, vud, dz, 2) #left leg renormalization
+    # vud = CounterTerm.z_renormalization(para.order, vud, dz2, 1) #right leg renormalization
 
     vuu = [vuu[(o, 0)] for o in 1:para.order]
     vud = [vud[(o, 0)] for o in 1:para.order]

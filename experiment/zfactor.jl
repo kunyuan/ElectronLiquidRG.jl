@@ -35,7 +35,7 @@ function get_z()
     return dz
 end
 
-function get_ver3()
+function get_ver3(dz, dz2)
     para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order)
     f_pp = jldopen("data/ver3_PP.jld2", "r")
     f_phe = jldopen("data/ver3_PHE.jld2", "r")
@@ -53,7 +53,7 @@ function get_ver3()
         @assert kgrid ≈ sparseΛgrid
 
         kgrid, _ver3 = f_phe[key]
-        ver3_phe[fi, :] = _ver3
+        ver3_phe[fi, :] = _ver3 - dz[1][fi, :] * para.NF
         @assert kgrid ≈ sparseΛgrid
 
         kgrid, _ver3 = f_ph[key]
@@ -84,7 +84,7 @@ function print_ver3(ver3, fi=size(ver3)[1]; nsample=5)
     printstyled(@sprintf("%12s    %24s\n",
             "k/kF", "ver3"), color=:yellow)
     for ki in kidx
-        @printf("%12.6f    %24s\n", kgrid[ki] / kF, "$(ver3[fi, ki])")
+        @printf("%12.6f    %24s\n", kgrid[ki] / kF, "$(ver3[fi, ki]/para.NF)")
     end
 end
 
@@ -463,7 +463,7 @@ end
 
 dz = get_z()
 dz2 = [dz[1] for i in 1:length(dz)] # right leg is fixed to the Fermi surface 
-ver3_pp, ver3_phe, ver3_ph = get_ver3()
+ver3_pp, ver3_phe, ver3_ph = get_ver3(dz, dz2)
 println("PP channel")
 print_ver3(ver3_pp; nsample=10)
 println("PHE channel")
@@ -492,7 +492,7 @@ print_ver4(vuu, vud; nsample=10)
 
 vs = -real.((vuu + vud)) / 2.0 # -Gamma4 (multi-loop Feynman diagrams are for -Gamma4)
 vs = vs .* 2.0 # u definition has a factor of 2
-a_fine = a_on_fine_grid(vs)
+a_fine = a_on_fine_grid(vs[2])
 
 
 _u, _Fs, _du = solve_RG(vuu, vud, ver3)
