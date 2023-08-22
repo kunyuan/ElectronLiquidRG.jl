@@ -268,36 +268,23 @@ function c_on_fine_grid(a)
     println("c_deriv")
     println(c_deriv[1, :])
 
-    return c_deriv
+    return c_deriv / para.NF
 end
 
-function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
+function solve_RG(a, b_deriv, c_deriv; max_iter=20, mix=0.5)
+
     function Rex(Fs, k)
         _p = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs, Fa=-0.0, isDynamic=true, order=1)
         return RG.R_exchange(_p, k, _p.kF)
     end
 
-    Fmesh = SimpleG.Arbitrary{Float64}(vuu[1].mesh[1])
-    Kmesh = vuu[1].mesh[2]
+    Fmesh = SimpleG.Arbitrary{Float64}(a.mesh[1])
+    Kmesh = a.mesh[2]
 
-    a(Fs::Float64, k::Float64, vs) = RG.linear_interp(vs, Fmesh, Kmesh, Fs, k) * 2
-    b(Fs::Float64, k::Float64, ver3) = RG.linear_interp(ver3, Fmesh, Kmesh, Fs, k) / para.NF * 4
+    interp(Fs::Float64, k::Float64, v) = RG.linear_interp(v, Fmesh, Kmesh, Fs, k)
 
-    vs = -real.((vuu + vud)) / 2.0 # -Gamma4 (multi-loop Feynman diagrams are for -Gamma4)
-    vs1, vs2 = vs[1], vs[2]
-    ver3 = -real.(ver3) / 2.0 # -Gamma3 (because the direct interaction is negative)
-    # println(" vs : ", vs)
-    # println(" ver3 : ", ver3)
-    println(size(vs2))
-    println(Fmesh)
-    for i in eachindex(Fmesh)
-        println(vs2.mesh[1][i], " -> ", vs2[i, 1])
-    end
-    println(a(-0.1, para.kF, vs2))
 
-    c = para.me / 8 / π / para.NF # ~0.2 for rs=1
-
-    # Λgrid = RG.Λgrid(para.kF)
+    Λgrid = Kmesh
 
     # Fs_Λ = zeros(length(Λgrid))
     Fs_Λ = [RG.KO(para, l, para.kF)[1] for l in Λgrid]
@@ -310,26 +297,33 @@ function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
     # dFs_Λ = [∂R_∂Λ[i] / (1 - ∂R_∂F[i]) for i in eachindex(Λgrid)]
     # dFs_Λ = [∂R_∂Λ[i] / (1 - ∂R_∂F[i]) for i in eachindex(Λgrid)]
 
-    smoothed, dFs_Λ = compute_derivative(Λgrid, Fs_Λ, s=0.0)
-    plot_fit(Λgrid, Fs_Λ, smoothed, dFs_Λ)
+    # smoothed, dFs_Λ = compute_derivative(Λgrid, Fs_Λ, s=0.0)
+    # plot_fit(Λgrid, Fs_Λ, smoothed, dFs_Λ)
 
     u_Λ = zeros(length(Λgrid))
-    du_Λ = zeros(length(Λgrid))
+    # du_Λ = zeros(length(Λgrid))
 
-    println("Step 1: solve for without b and c")
+    # println("Step 1: solve for without b and c")
 
     for i in 1:max_iter
         Fs_Λ_new = zeros(length(Λgrid))
         u_Λ_new = zeros(length(Λgrid))
+
+        _a = [interp(Fs_Λ[i], Λgrid[i], a).val for i in eachindex(Λgrid)]
+        _b_deriv = [interp(Fs_Λ[i], Λgrid[i], b_deriv).val for i in eachindex(Λgrid)]
+        _c_deriv = [interp(Fs_Λ[i], Λgrid[i], c_deriv).val for i in eachindex(Λgrid)]
 
         for ui in eachindex(Λgrid)
             k = Λgrid[ui]
 
             _u = u_Λ[ui]
             _Fs = Fs_Λ[ui]
-            _a = a(_Fs, k, vs2).val
 
-            Fs_Λ_new[ui] = -Rex(_Fs, k) + _a
+            _c = Interp.integrate1D(_c_deriv .* u_Λ .^ 2, Λgrid, [Λgrid[ui], Λgrid[end]])
+            _b = Interp.integrate1D(_b_deriv .* u_Λ, Λgrid, [Λgrid[ui], Λgrid[end]])
+
+            Fs_Λ_new[ui] = -Rex(_Fs, k) + _a[ui] - _b - _c
+            # Fs_Λ_new[ui] = -Rex(_Fs, k) + _a[ui] - _b
             # Fs_Λ_new[ui] = -Rex(_Fs, k)
             # Fs_Λ_new[ui] = -Rex(_Fs, k) + _a - _b * u_Λ[ui] - _b_deriv + _c
             # Fs_Λ_new[ui] = -Rex(_Fs, k) + _a
@@ -359,106 +353,21 @@ function solve_RG(vuu, vud, ver3; max_iter=20, mix=0.5)
 
     end
 
-    w = [a(Fs_Λ[ki], k, vs2).err for (ki, k) in enumerate(Λgrid)]
-    smoothed, dFs_Λ_new = compute_derivative(Λgrid, Fs_Λ, s=(maximum(w))^2 * 2)
+    # w = [a(Fs_Λ[ki], k, vs2).err for (ki, k) in enumerate(Λgrid)]
+    # smoothed, dFs_Λ_new = compute_derivative(Λgrid, Fs_Λ, s=(maximum(w))^2 * 2)
 
-    # plot_fit(Λgrid, Fs_Λ, smoothed, dFs_Λ)
-    dFs_Λ .= dFs_Λ * mix .+ dFs_Λ_new * (1 - mix)
-    # exit(0)
+    # # plot_fit(Λgrid, Fs_Λ, smoothed, dFs_Λ)
+    # dFs_Λ .= dFs_Λ * mix .+ dFs_Λ_new * (1 - mix)
+    # # exit(0)
 
-    para_Λ = [UEG.ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs_Λ[ui], Fa=-0.0, isDynamic=true) for ui in eachindex(Λgrid)]
-    ∂R_∂Λ = [RG.∂R_∂Λ_exchange(para_Λ[i], k, para.kF) for (i, k) in enumerate(Λgrid)]
-    ∂R_∂F = [RG.∂R_∂F_exchange(para_Λ[i], k, para.kF) for (i, k) in enumerate(Λgrid)]
-    du_Λ = [(1 + ∂R_∂F[i]) * dFs_Λ[i] + ∂R_∂Λ[i] for i in eachindex(Λgrid)]
+    # para_Λ = [UEG.ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs_Λ[ui], Fa=-0.0, isDynamic=true) for ui in eachindex(Λgrid)]
+    # ∂R_∂Λ = [RG.∂R_∂Λ_exchange(para_Λ[i], k, para.kF) for (i, k) in enumerate(Λgrid)]
+    # ∂R_∂F = [RG.∂R_∂F_exchange(para_Λ[i], k, para.kF) for (i, k) in enumerate(Λgrid)]
+    # du_Λ = [(1 + ∂R_∂F[i]) * dFs_Λ[i] + ∂R_∂Λ[i] for i in eachindex(Λgrid)]
 
     println(Fs_Λ[1], ", ", u_Λ[1])
 
-    # exit(0)
-    println("Step 2: solve for u(Λ)")
-
-    for i in 1:max_iter
-        Fs_Λ_new = zeros(length(Λgrid))
-        u_Λ_new = zeros(length(Λgrid))
-        dFs_Λ_new = zeros(length(Λgrid))
-
-        b_Λ = [b(Fs_Λ[ki], k, ver3).val for (ki, k) in enumerate(Λgrid)]
-        println("b: ", b_Λ[1])
-        for ui in eachindex(Λgrid)
-            k = Λgrid[ui]
-
-            _u = u_Λ[ui]
-            _Fs = Fs_Λ[ui]
-            _a = a(_Fs, k, vs2).val
-            _b = b_Λ[ui]
-            _c = c * Interp.integrate1D(u_Λ .^ 2, Λgrid, [Λgrid[ui], Λgrid[end]])
-            _b_deriv = Interp.integrate1D(du_Λ .* b_Λ, Λgrid, [Λgrid[ui], Λgrid[end]])
-            # println("_a = $_a, _b = $_b, _c = $_c, _b_deriv = $_b_deriv")
-
-            # Fs_Λ_new[ui] = -Rex(_Fs, k) + _a + _b * u_Λ[ui] + _b_deriv - _c
-            # Fs_Λ_new[ui] = -Rex(_Fs, k) + _a + _b * u_Λ[ui] + _b_deriv
-            Fs_Λ_new[ui] = -Rex(_Fs, k) + _a + _b * u_Λ[ui]
-            # Fs_Λ_new[ui] = -Rex(_Fs, k)
-            # Fs_Λ_new[ui] = -Rex(_Fs, k) + _a - _b * u_Λ[ui] - _b_deriv + _c
-            # Fs_Λ_new[ui] = -Rex(_Fs, k) + _a
-
-            para_new = UEG.ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs_Λ_new[ui], Fa=-0.0, isDynamic=true)
-            u_Λ_new[ui] = RG.u_from_f(para_new, k, para.kF)[1]
-        end
-        diff_u = maximum(abs.(u_Λ_new - u_Λ))
-        diff_Fs = maximum(abs.(Fs_Λ_new - Fs_Λ))
-        println("iter $i, diff_u = $diff_u, diff_Fs = $diff_Fs")
-        # for li in eachindex(Λgrid)
-        #     # println(Λgrid[li]/para.kF, " : ", Fs_Λ[li], " -> ", Fs_Λ_new[li], " = diff ", Fs_Λ_new[li]-Fs_Λ[li], " with ", vs2[end, li])
-        #     println(Λgrid[li] / para.kF, " : ", Fs_Λ[li], " -> ", Fs_Λ_new[li], " = diff ", Fs_Λ_new[li] - Fs_Λ[li], " with ", a(Fs_Λ_new[li], Λgrid[li], vs2))
-        # end
-        # println("before: ", Fs_Λ)
-        # println("after: ", Fs_Λ_new)
-        # println("diff: ", Fs_Λ_new-Fs_Λ)
-        if diff_Fs / maximum(abs.(Fs_Λ)) < 1e-4
-            break
-        end
-        u_Λ .= u_Λ * mix .+ u_Λ_new * (1 - mix)
-        Fs_Λ .= Fs_Λ * mix .+ Fs_Λ_new * (1 - mix)
-
-        w = [a(Fs_Λ[ki], k, vs2).err for (ki, k) in enumerate(Λgrid)]
-        smoothed, dFs_Λ_new = compute_derivative(Λgrid, Fs_Λ, s=(maximum(w))^2 * 2)
-
-        # plot_fit(Λgrid, Fs_Λ, smoothed, dFs_Λ_new)
-        # dFs_Λ .= dFs_Λ * mix .+ dFs_Λ_new * (1 - mix)
-        # exit(0)
-
-        # para_Λ = [UEG.ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs_Λ[ui], Fa=-0.0, isDynamic=true) for ui in eachindex(Λgrid)]
-        # ∂R_∂Λ = [RG.∂R_∂Λ_exchange(para_Λ[i], k, para.kF) for (i, k) in enumerate(Λgrid)]
-        # ∂R_∂F = [RG.∂R_∂F_exchange(para_Λ[i], k, para.kF) for (i, k) in enumerate(Λgrid)]
-        # du_Λ = [(1 + ∂R_∂F[i]) * dFs_Λ[i] + ∂R_∂Λ[i] for i in eachindex(Λgrid)]
-    end
-
-
-    u_ref = [-Interp.integrate1D(du_Λ, Λgrid, [Λgrid[i], Λgrid[end]]) for i in eachindex(Λgrid)]
-    for li in eachindex(Λgrid)
-        println(Λgrid[li] / para.kF, " : ", Fs_Λ[li], " - ", u_Λ[li], " ref ", u_ref[li])
-    end
-
-    # du_Λ = compute_derivative(Λgrid, u_Λ)
-
-    # Plot the original data and the derivative
-    # p1 = plot(Λgrid, u_Λ, label="Noisy Data", title="Noisy Data")
-    # p2 = plot(Λgrid, du_Λ, label="Derived Data", title="Derivative", color=:red)
-
-    @assert all(diff(Λgrid) .> 0)
-
-    w = [a(Fs_Λ[ki], k, vs2).err for (ki, k) in enumerate(Λgrid)]
-    println(maximum(w))
-    # println(length(w), ", ", length(Λgrid))
-    smoothed, dFs_Λ = compute_derivative(Λgrid, Fs_Λ, s=(maximum(w))^2 * 2)
-    plot_fit(Λgrid, Fs_Λ, smoothed, dFs_Λ)
-    # p1 = plot(Λgrid ./ para.kF, Fs_Λ, xlims=[1.0, 5.0], seriestype=[:scatter, :path], linestyle=:dash, mark=:dot, label="Noisy Data", title="Noisy Data")
-    # plot!(p1, Λgrid ./ para.kF, smoothed, label="smoothed Data", title="smoothed Data")
-    # p2 = plot(Λgrid ./ para.kF, dFs_Λ, xlims=[1.0, 5.0], seriestype=[:scatter, :path], linestyle=:dash, mark=:dot, label="Derived Data", title="Derivative", color=:red)
-    # p = plot(p1, p2, layout=(1, 2), size=(800, 400))
-    # display(p)
-    # readline()
-    return u_Λ, Fs_Λ, du_Λ
+    return u_Λ, Fs_Λ
 end
 
 dz = get_z()
@@ -495,6 +404,6 @@ vs = vs .* 2.0 # u definition has a factor of 2
 a_fine = a_on_fine_grid(vs[2])
 
 
-_u, _Fs, _du = solve_RG(vuu, vud, ver3)
+_u, _Fs = solve_RG(a_fine, b_deriv, c_deriv)
 println(_Fs[1])
 println(_u[1])
