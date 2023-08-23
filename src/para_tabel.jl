@@ -8,7 +8,7 @@ fdict[5.0] = collect(LinRange(-2.0, 0.0, 8))
 # SparseΛgrid(kF) = CompositeGrid.LogDensedGrid(:gauss, [1.0 * kF, 32 * kF], [kF,], 4, 0.1 * kF, 4)
 SparseΛgrid(kF) = CompositeGrid.LogDensedGrid(:uniform, [1.0 * kF, 16 * kF], [kF,], 4, 0.1 * kF, 4)
 
-get_para(para, Fs) = UEG.ParaMC(rs=para.rs, beta=para.beta, Fs=Fs, Fa=-0.0, order=para.order,
+get_para(para, Fs; order=para.order) = UEG.ParaMC(rs=para.rs, beta=para.beta, Fs=Fs, Fa=-0.0, order=order,
     mass2=para.mass2, isDynamic=true, isFock=false)
 
 function u_from_f(para::ParaMC, kamp=para.kF, kamp2=kamp; verbose=0, N=32)

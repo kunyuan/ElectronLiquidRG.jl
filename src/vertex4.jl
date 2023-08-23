@@ -29,10 +29,10 @@ function vertex4_renormalize(para, filename, dz, dz2=dz; Fs=fdict[para.rs], Λgr
             vud[p][fi, :] = ver4[p][2, 1, :]
         end
     end
-    for k in keys(vuu)
-        println(vuu[k][end, 1])
-        println(vud[k][end, 1])
-    end
+    # for k in keys(vuu)
+    #     println(vuu[k][end, 1])
+    #     println(vud[k][end, 1])
+    # end
 
     vuu = CounterTerm.mergeInteraction(vuu)
     vuu = CounterTerm.z_renormalization(para.order, vuu, dz, 2) #left leg renormalization

@@ -11,15 +11,17 @@ using Plots
 
 const rs = 1.0
 const beta = 25.0
-const mass2 = 0.01
+const mass2 = 0.001
 const order = 1
 
 const para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order + 1)
 
 # const Fs = RG.fdict[para.rs]
+# const Fs = [-0.5, -0.4, -0.3, -0.2, -0.1, 0.0] #must be in increasing order
 const Fs = [-0.3, -0.2, -0.1, 0.0] #must be in increasing order
+# const Fs = [-1.2, -1.0, -0.8, -0.6, -0.4, -0.2, 0.0] #must be in increasing order
 # const Λgrid = RG.Λgrid(para.kF)
-const Λgrid = CompositeGrid.LogDensedGrid(:gauss, [1.0 * para.kF, 100 * para.kF], [para.kF,], 8, 0.2 * para.kF, 4)
+const Λgrid = CompositeGrid.LogDensedGrid(:gauss, [1.0 * para.kF, 100 * para.kF], [para.kF,], 8, 0.1 * para.kF, 8)
 const sparseΛgrid = RG.SparseΛgrid(para.kF)
 
 function get_z()
@@ -46,19 +48,35 @@ function get_ver3(dz, dz2)
     ver3_ph = MeshArray(Fs, sparseΛgrid; dtype=Complex{Measurement{Float64}})
 
     for (fi, F) in enumerate(Fs)
-        _para = RG.get_para(para, F)
-        key = UEG.short(_para)
+        # sometimes, MC.jl calculate the vertex3 with order = 2, the results are not affected
+        _para1 = RG.get_para(para, F; order=1)
+        _para2 = RG.get_para(para, F; order=2)
+        key1 = UEG.short(_para1)
+        key2 = UEG.short(_para2)
+        if haskey(f_pp, key1)
+            key = key1
+        elseif haskey(f_pp, key2)
+            key = key2
+        else
+            error("key not found")
+        end
         kgrid, _ver3 = f_pp[key]
         ver3_pp[fi, :] = _ver3
         @assert kgrid ≈ sparseΛgrid
 
         kgrid, _ver3 = f_phe[key]
-        ver3_phe[fi, :] = _ver3 - dz[1][fi, :] * para.NF
+        ver3_phe[fi, :] = _ver3
         @assert kgrid ≈ sparseΛgrid
 
-        kgrid, _ver3 = f_ph[key]
-        ver3_ph[fi, :] = _ver3
-        @assert kgrid ≈ sparseΛgrid
+        # kgrid, _ver3 = f_ph[key]
+        # ver3_ph[fi, :] = _ver3
+        # @assert kgrid ≈ sparseΛgrid
+        for (fi, Fs) in enumerate(ver3_ph.mesh[1])
+            _para = RG.get_para(para, Fs)
+            for (ki, k) in enumerate(ver3_ph.mesh[2])
+                ver3_ph[fi, ki] = RG.Lbubble(_para, k, para.kF)
+            end
+        end
     end
 
     return ver3_pp, ver3_phe, ver3_ph
@@ -73,18 +91,19 @@ function get_ver4(dz, dz2)
     return vuu, vud
 end
 
-function print_ver3(ver3, fi=size(ver3)[1]; nsample=5)
+# function print_ver3(ver3, fi=size(ver3)[1]; nsample=5)
+function print_ver3(ver3_pp, ver3_phe, ver3_ph; fi=1, nsample=5)
     kF = para.kF
-    Fs = ver3.mesh[1]
-    kgrid = ver3.mesh[2]
+    Fs = ver3_pp.mesh[1]
+    kgrid = ver3_pp.mesh[2]
     step = Int(ceil(length(kgrid) / nsample))
     kidx = [i for i in 1:step:length(kgrid)]
     # fi = length(Fs)
     println("Fs = $(Fs[fi]) at index $fi")
-    printstyled(@sprintf("%12s    %24s\n",
-            "k/kF", "ver3"), color=:yellow)
+    printstyled(@sprintf("%12s    %24s    %24s    %24s\n",
+            "k/kF", "ver3_pp", "ver3_phe", "ver3_ph"), color=:yellow)
     for ki in kidx
-        @printf("%12.6f    %24s\n", kgrid[ki] / kF, "$(ver3[fi, ki]/para.NF)")
+        @printf("%12.6f    %24s    %24s    %24s\n", kgrid[ki] / kF, real.(ver3_pp[fi, ki]) / para.NF, real.(ver3_phe[fi, ki]) / para.NF, real.(ver3_ph[fi, ki]) / para.NF)
     end
 end
 
@@ -224,11 +243,25 @@ function b_on_fine_grid(b)
             if ki >= length(finekgrid) || finekgrid[ki] >= kgrid[end]
                 b_fine[fi, ki], b_deriv[fi, ki] = b_tail(finekgrid[ki])
             else
-                b_deriv[fi, ki] = db[ki]
-                b_fine[fi, ki] = smoothed[ki]
+                # b_deriv[fi, ki] = db[ki]
+                # b_fine[fi, ki] = smoothed[ki]
+
+                i1 = searchsortedfirst(kgrid, finekgrid[ki])
+                if i1 == 1
+                    i2 = 2
+                elseif i1 > 1 && i1 <= length(kgrid)
+                    i2 = i1 - 1
+                else
+                    @error("fine k grid is not in the range of kgrid")
+                end
+
+                # println(i1, ", with kgrid = ", kgrid[i1], " to ", kgrid[i2], ", finekgrid = ", finekgrid[ki])
+                b_deriv[fi, ki] = (b[fi, i1].val - b[fi, i2].val) / (kgrid[i1] - kgrid[i2])
+                # println(b_deriv[fi, ki], ", with b = ", b[i1].val, " to ", b[i2].val)
                 # b1 = interp_b(Fmesh[fi], finekgrid[ki], b)
                 # b2 = interp_b(Fmesh[fi], finekgrid[ki+1], b)
                 # b_deriv[fi, ki] = (b1.val - b2.val) / (finekgrid[ki] - finekgrid[ki+1])
+                b_fine[fi, ki] = interp_b(Fmesh[fi], finekgrid[ki], b)
             end
         end
     end
@@ -237,9 +270,18 @@ function b_on_fine_grid(b)
         test = [-Interp.integrate1D(b_deriv[fi, :], finekgrid, [kgrid[i], finekgrid[end]]) + b_tail(finekgrid[end])[1] for i in 1:length(kgrid)]
         # test = test ./ kgrid
 
-        println("k/kF     dvs     dvs_fitted     test: ", Fmesh[fi])
-        for (ki, k) in enumerate(kgrid)
-            println("$(k / para.kF)    $(b_deriv[fi, ki]) $(b_tail(k)[2])   $(b[fi, ki])     $(test[ki])")
+        nsample = 5
+        # step = Int(ceil(length(finekgrid) / nsample))
+        # kidx = [i for i in 1:step:length(finekgrid)]
+        kidx = collect(1:length(kgrid))
+
+        println("Fs = ", Fmesh[fi])
+        @printf("%12s    %12s    %12s    %12s    %12s\n", "k/kF", "b_deriv", "b_tail", "b_finegrid", "int b_deriv")
+        for ki in kidx
+            k = kgrid[ki]
+            dkidx = searchsortedfirst(finekgrid, k)
+            @printf("%12.6f    %12.6f    %12.6f    %12.6f    %12.6f\n", k / para.kF, b_deriv[fi, dkidx], b_tail(k)[2], b[fi, ki], test[ki])
+            # println("$(k / para.kF)    $(b_deriv[fi, ki]) $(b_tail(k)[2])   $(b[fi, ki])     $(test[ki])")
         end
     end
 
@@ -265,10 +307,14 @@ function c_on_fine_grid(a)
         end
     end
 
-    println("c_deriv")
-    println(c_deriv[1, :])
+    println("c_deriv: ", c_deriv[1, 1], " -> ", c_deriv[1, end])
 
     return c_deriv / para.NF
+end
+
+function get_u(Fs, Λ)
+    para_new = UEG.ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs, Fa=-0.0, isDynamic=true)
+    return RG.u_from_f(para_new, Λ, para.kF)[1]
 end
 
 function solve_RG(a, b_deriv, c_deriv; max_iter=20, mix=0.5)
@@ -370,32 +416,100 @@ function solve_RG(a, b_deriv, c_deriv; max_iter=20, mix=0.5)
     return u_Λ, Fs_Λ
 end
 
+# solve the RG equation as a differential equation
+function solve_RG2(a, b_deriv, c_deriv; maxiter=100, mix=0.5)
+
+    function Rex(Fs, k)
+        _p = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=Fs, Fa=-0.0, isDynamic=true, order=1)
+        return RG.R_exchange(_p, k, _p.kF)
+    end
+
+    Fmesh = SimpleG.Arbitrary{Float64}(a.mesh[1])
+    Kmesh = a.mesh[2]
+
+    interp(Fs::Float64, k::Float64, v) = RG.linear_interp(v, Fmesh, Kmesh, Fs, k)
+
+    Λgrid = deepcopy(Kmesh)
+
+    Fs_Λ = [RG.KO(para, l, para.kF)[1] for l in Λgrid]
+    u_Λ = zeros(length(Λgrid))
+
+    a_Λ = zeros(length(Λgrid))
+    db_Λ = zeros(length(Λgrid))
+    dc_Λ = zeros(length(Λgrid))
+
+    #from the last scale to the Fermi surface, inverse iteration
+    for i in reverse(1:length(Λgrid)-1)
+        Λ = Λgrid[i]
+
+        Fs_Λ[i] = Fs_Λ[i+1]
+        u_Λ[i] = get_u(Fs_Λ[i], Λ) #temporary value
+        for iter in 1:maxiter
+            Fs = Fs_Λ[i]
+
+            a_Λ[i] = interp(Fs, Λ, a).val
+            db_Λ[i] = interp(Fs, Λ, b_deriv).val
+            # db_Λ[i] = interp(-0.2, Λ, b_deriv).val
+            dc_Λ[i] = interp(Fs, Λ, c_deriv).val
+
+            # println(db_Λ[i:end])
+            _b = -Interp.integrate1D(db_Λ .* u_Λ, Λgrid, [Λ, Λgrid[end]])
+            _c = -Interp.integrate1D(dc_Λ .* u_Λ .^ 2, Λgrid, [Λ, Λgrid[end]])
+
+            Fs_Λ_new = -Rex(Fs, Λ) + a_Λ[i] + _b * 1.0 + _c * 0.0
+            u_Λ_new = get_u(Fs, Λ) #temporary value
+
+            # println(i, ": Fs = ", Fs_Λ[i], " and u =", u_Λ[i], " with deriv ", db_Λ[i])
+            # u_Λ[i] = get_u(Fs_Λ[i], Λ)
+            if abs(Fs_Λ_new - Fs_Λ[i]) < 1e-4
+                break
+            end
+
+            if iter >= maxiter - 1
+                println("Warning: max iteration reached: ", iter, " with diff ", abs(Fs_Λ_new - Fs_Λ[i]))
+            end
+
+            Fs_Λ[i] = Fs_Λ[i] * mix + Fs_Λ_new * (1 - mix)
+            u_Λ[i] = get_u(Fs_Λ[i], Λ)
+        end
+
+    end
+
+    println("#k/kF         Fs                u")
+    for i in eachindex(Λgrid)
+        # println(Λgrid[i] / para.kF, "    ", Fs_Λ[i], "    ", u_Λ[i])
+        @printf("%12.6f    %24s    %24s\n", Λgrid[i] / para.kF, Fs_Λ[i], u_Λ[i])
+    end
+    # println(Fs_Λ[1], ", ", u_Λ[1])
+
+    return u_Λ, Fs_Λ
+end
+
 dz = get_z()
 dz2 = [dz[1] for i in 1:length(dz)] # right leg is fixed to the Fermi surface 
 ver3_pp, ver3_phe, ver3_ph = get_ver3(dz, dz2)
-println("PP channel")
-print_ver3(ver3_pp; nsample=10)
-println("PHE channel")
-print_ver3(ver3_phe; nsample=10)
-println("PH channel")
-print_ver3(ver3_ph; nsample=10)
+print_ver3(ver3_pp, ver3_phe, ver3_ph; nsample=5)
 
 ver3 = ver3_pp + ver3_phe + ver3_ph
 
-b = -real.(ver3) / 2.0 #ver3 only has up, up, down, down spin configuration, project to spin symmetric channel
+b = -real.(ver3) / 2.0 #ver3 only has up, up, down, down spin configuration, project to spin symmetric channel.
+# the extra minus sign is because ver3 sign is defined as (-1)^order where order is the number of interaction lines, which is 2 for ver3. But here we need the sign to be (-1)^(order-1) = -1
 b = b .* 2 .* 2 # uGGR + RGGu contributes factor of 2, then u definition contributes another factor of 2
 
 b = b / para.NF
+
+# b = b - dz[1][fi, :]
+# b = b + dz[1]
 
 b_fine, b_deriv = b_on_fine_grid(b)
 
 c_deriv = c_on_fine_grid(b)
 
 vuu, vud = get_ver4(dz, dz2)
-print_ver4(vuu, vud, 1; nsample=10)
-print_ver4(vuu, vud, 2; nsample=10)
-print_ver4(vuu, vud, 3; nsample=10)
-print_ver4(vuu, vud; nsample=10)
+print_ver4(vuu, vud, 1; nsample=5)
+# print_ver4(vuu, vud, 2; nsample=10)
+# print_ver4(vuu, vud, 3; nsample=10)
+print_ver4(vuu, vud; nsample=5)
 
 # vs, vs_deriv = a_derivative(vuu, vud)
 
@@ -404,6 +518,6 @@ vs = vs .* 2.0 # u definition has a factor of 2
 a_fine = a_on_fine_grid(vs[2])
 
 
-_u, _Fs = solve_RG(a_fine, b_deriv, c_deriv)
+_u, _Fs = solve_RG2(a_fine, b_deriv, c_deriv)
 println(_Fs[1])
 println(_u[1])
