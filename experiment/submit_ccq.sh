@@ -57,6 +57,9 @@ module load openmpi
 module load modules/2.2-20230808
 module load julia/1.9.0
 
+julia --project -e 'using Pkg; pkg"instantiate"'
+julia --project -e 'using Pkg; pkg"precompile"'
+
 ## Just run the job
 cd $SLURM_SUBMIT_DIR
 #echo $SLURM_SUBMIT_DIR
