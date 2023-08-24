@@ -498,8 +498,7 @@ b = b .* 2 .* 2 # uGGR + RGGu contributes factor of 2, then u definition contrib
 
 b = b / para.NF
 
-# b = b - dz[1][fi, :]
-# b = b + dz[1]
+b = b + dz[1]
 
 b_fine, b_deriv = b_on_fine_grid(b)
 
