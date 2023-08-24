@@ -100,4 +100,167 @@ function c_coeff_phe(para, kamp=para.kF, kamp2=para.kF)
 end
 
 
+#Particle-particle diagram, order = 2
+# sign = (-1)^order = 1
+#
+# kamp,up   kamp2,down
+#t2 |-- KO ---| t2/t3
+#   |         |
+# up^         ^down
+#   |         |
+# 0 |-- KO ---| 0/t1
+#kamp,up  kamp2,down
+# with Yukawa interaction mass2 = 0.1, we use Ver4.MC_PH to calculate the PPr diagram, where the leading order diagram should be the same as the particle-particle diagram, we obtain 
+# order                upup            updown
+#   1                 0.328(4)          0.0
+#   2                 0.465(16)         0.661(22)
+# therefore, we expect PP to be positively defined
+function _ver4PP(vars, config)
+    varK, varT, varX, varN = vars
+    R, Theta, Phi = varK
+    para, kamp, kamp2 = config.userdata
+
+    t1, t2, t3 = varT[2], varT[3], varT[4]
+    r = R[1] / (1 - R[1])
+    θ, ϕ = Theta[1], Phi[1]
+    x = varX[1]
+    ki = varN[1]
+    kl, kr = kamp[ki], kamp2[ki]
+
+
+    q = [r * sin(θ) * cos(ϕ), r * sin(θ) * sin(ϕ), r * cos(θ)]
+
+    k1 = [kl + q[1], q[2], q[3]]
+    k2 = [kr * x - q[1], kr * sqrt(1 - x^2) - q[2], -q[3]]
+
+    ek1 = (dot(k1, k1) - para.kF^2) / 2 / para.me
+    ek2 = (dot(k2, k2) - para.kF^2) / 2 / para.me
+
+    g1 = Spectral.kernelFermiT(t2, ek1, para.β)
+    g2 = Spectral.kernelFermiT(t2, ek2, para.β)
+    g3 = Spectral.kernelFermiT(t2 - t1, ek2, para.β)
+    g4 = Spectral.kernelFermiT(t3, ek2, para.β)
+    g5 = Spectral.kernelFermiT(t3 - t1, ek2, para.β)
+
+    qd = sqrt(dot(q, q))
+    vq1 = UEG.interactionStatic(para, qd, 0.0, t1)
+    wq1 = UEG.interactionDynamic(para, qd, 0.0, t1)
+
+    vq2 = UEG.interactionStatic(para, qd, t2, t3)
+    wq2 = UEG.interactionDynamic(para, qd, t2, t3)
+
+    qe = [-kl + kr * x - q[1], kr * sqrt(1 - x^2) - q[2], -q[3]]
+    qe = sqrt(dot(qe, qe))
+    vq2e = UEG.interactionStatic(para, qe, t2, t3)
+    wq2e = UEG.interactionDynamic(para, qe, t2, t3)
+
+    # vq0 = -4π *para.e0^2 / (qd^2+para.mass2) /para.β 
+    # @assert vq ≈ vq0 "vq=$vq, vq0=$vq0, qd=$qd, t1=$t1"
+    # wq = 0.0
+    # println(t1)
+
+    phase1 = phase((0.0, t2, 0.0, t2), -1, 0, 0, para.β)
+    phase2 = phase((0.0, t2, t1, t2), -1, 0, 0, para.β)
+
+    phase3 = phase((0.0, t2, 0.0, t3), -1, 0, 0, para.β)
+    phase4 = phase((0.0, t2, t1, t3), -1, 0, 0, para.β)
+
+    phase3e = phase((0.0, t3, 0.0, t2), -1, 0, 0, para.β)
+    phase4e = phase((0.0, t3, t1, t2), -1, 0, 0, para.β)
+
+    factor = r^2 * sin(θ) / (1 - R[1])^2 / (2π)^3 * para.NF
+    factor /= 2 # angle average with l=0
+
+    wd = g1 * g2 * vq1 * (vq2) * phase1
+    wd += g1 * g3 * wq1 * (vq2) * phase2
+    wd += g1 * g4 * vq1 * (wq2) * phase3
+    wd += g1 * g5 * wq1 * (wq2) * phase4
+    wd *= factor
+
+    we = g1 * g2 * vq1 * (-vq2e) * phase1
+    we += g1 * g3 * wq1 * (-vq2e) * phase2
+    we += g1 * g4 * vq1 * (-wq2e) * phase3e
+    we += g1 * g5 * wq1 * (-wq2e) * phase4e
+    we *= factor
+
+    # return wd + we / 2.0
+    return wd + we / 2.0 #return spin symmetrized pp ver4
+end
+
+function _measure_ver4(vars, obs, weights, config)
+    varK, varT, varX, varN = vars
+    ki = varN[1]
+    obs[1][ki] += weights[1]
+end
+
+"""
+    function vertex4_oneloop(para::ParaMC;
+
+calculate particle-particle-pair * R. Only spin (up, up; down, down) is non-zero!
+
+In the large kamp limit, with kamp2 =0, it approaches to -m*e^2*NF*pi/2/kamp
+"""
+function vertex4_oneloop(para::ParaMC;
+    neval=1e6, #number of evaluations
+    kamp=[para.kF,],
+    kamp2=[para.kF for i in 1:length(kamp)],
+    config=nothing,
+    print=0,
+    integrand=_ver4PP,
+    filename=nothing,
+    kwargs...
+)
+
+    UEG.MCinitialize!(para)
+    dim, β, kF = para.dim, para.β, para.kF
+    R = MCIntegration.Continuous(0.0, 1.0 - 1e-6) # a small cutoff to make sure R is not 1
+    Theta = MCIntegration.Continuous(0.0, 1π)
+    Phi = MCIntegration.Continuous(0.0, 2π)
+    K = CompositeVar(R, Theta, Phi)
+    T = MCIntegration.Continuous(0.0, β, offset=1)
+    T.data[1] = 0.0
+    X = MCIntegration.Continuous(-1.0, 1.0) #x=cos(θ)
+    N = Discrete(1, length(kamp))
+
+    dof = [[1, 3, 1, 1],]
+    obs = [zeros(ComplexF64, length(kamp)),]
+
+    if isnothing(config)
+        config = MCIntegration.Configuration(
+            var=(K, T, X, N),
+            dof=dof,
+            obs=obs,
+            type=ComplexF64,
+            userdata=(para, kamp, kamp2),
+            kwargs...
+        )
+    end
+
+    result = integrate(integrand;
+        measure=_measure_ver4,
+        config=config, neval=neval, print=print, solver=:vegasmc, kwargs...)
+
+    if isnothing(result) == false
+
+        avg, std = result.mean[1], result.stdev[1]
+        r = measurement.(real(avg), real(std))
+        i = measurement.(imag(avg), imag(std))
+        ver4 = Complex.(r, i)
+
+        if isnothing(filename) == false
+            jldopen(filename, "a+") do f
+                key = "$(UEG.short(para))"
+                if haskey(f, key)
+                    @warn("replacing existing data for $key")
+                    delete!(f, key)
+                end
+                f[key] = (kamp, ver4)
+            end
+        end
+
+        return ver4, result
+    end
+end
+
+
 
