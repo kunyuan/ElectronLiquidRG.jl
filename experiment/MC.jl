@@ -43,7 +43,7 @@ for (_rs, _mass2, _beta, _order) in Iterators.product(rs, mass2, beta, order)
         println("PHE ver3 on $(UEG.short(para))")
         ElectronLiquidRG.vertex3(para, kamp=Λgrid, neval=neval, integrand=ElectronLiquidRG._Lver3, filename="data/ver3_PHE.jld2")
 
-        println("PH ver3 on $(UEG.short(para))")
-        ElectronLiquidRG.vertex3(para, kamp=Λgrid, neval=neval, integrand=ElectronLiquidRG._Lbubble, filename="data/ver3_PH.jld2")
+        # println("PH ver3 on $(UEG.short(para))")
+        # ElectronLiquidRG.vertex3(para, kamp=Λgrid, neval=neval, integrand=ElectronLiquidRG._Lbubble, filename="data/ver3_PH.jld2")
     end
 end
