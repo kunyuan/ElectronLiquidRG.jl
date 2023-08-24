@@ -43,7 +43,7 @@ function get_ver3(dz, dz2)
     para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order)
     f_pp = jldopen("data/ver3_PP.jld2", "r")
     f_phe = jldopen("data/ver3_PHE.jld2", "r")
-    f_ph = jldopen("data/ver3_PH.jld2", "r")
+    # f_ph = jldopen("data/ver3_PH.jld2", "r")
     # z1 = zeros(Measurement{Float64}, length(Fs), length(Λgrid))
     ver3_pp = MeshArray(Fs, sparseΛgrid; dtype=Complex{Measurement{Float64}})
     ver3_phe = MeshArray(Fs, sparseΛgrid; dtype=Complex{Measurement{Float64}})
@@ -470,7 +470,6 @@ function solve_RG2(a, b_deriv, c_deriv; maxiter=100, mix=0.5)
             Fs_Λ_new = -Rex(Fs, Λ) + a_Λ[i] + _b * 1.0 + _c * 1.0
             # u_Λ_new = get_u(Fs, Λ) #temporary value
 
-            # println(i, ": Fs = ", Fs_Λ[i], " and u =", u_Λ[i], " with deriv ", db_Λ[i])
             # u_Λ[i] = get_u(Fs_Λ[i], Λ)
             if abs(Fs_Λ_new - Fs_Λ[i]) < 1e-4
                 break
