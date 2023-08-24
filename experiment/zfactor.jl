@@ -24,6 +24,8 @@ const Fs = [-0.3, -0.2, -0.1, 0.0] #must be in increasing order
 const Λgrid = CompositeGrid.LogDensedGrid(:gauss, [1.0 * para.kF, 100 * para.kF], [para.kF,], 8, 0.1 * para.kF, 8)
 const sparseΛgrid = RG.SparseΛgrid(para.kF)
 
+println("Λgrid = ", Λgrid.grid / para.kF)
+
 function get_z()
 
     _para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order)
@@ -246,27 +248,32 @@ function b_on_fine_grid(b)
                 # b_deriv[fi, ki] = db[ki]
                 # b_fine[fi, ki] = smoothed[ki]
 
-                i1 = searchsortedfirst(kgrid, finekgrid[ki])
-                if i1 == 1
-                    i2 = 2
-                elseif i1 > 1 && i1 <= length(kgrid)
-                    i2 = i1 - 1
-                else
-                    @error("fine k grid is not in the range of kgrid")
-                end
-
-                # println(i1, ", with kgrid = ", kgrid[i1], " to ", kgrid[i2], ", finekgrid = ", finekgrid[ki])
-                b_deriv[fi, ki] = (b[fi, i1].val - b[fi, i2].val) / (kgrid[i1] - kgrid[i2])
-                # println(b_deriv[fi, ki], ", with b = ", b[i1].val, " to ", b[i2].val)
-                # b1 = interp_b(Fmesh[fi], finekgrid[ki], b)
-                # b2 = interp_b(Fmesh[fi], finekgrid[ki+1], b)
-                # b_deriv[fi, ki] = (b1.val - b2.val) / (finekgrid[ki] - finekgrid[ki+1])
                 b_fine[fi, ki] = interp_b(Fmesh[fi], finekgrid[ki], b)
             end
         end
+
+        # it is important to derive the value on fine mesh first, then take derivative with spline fitting
+        _w = [_d.err for _d in b_fine[fi, :]]
+        _b_data = [_d.val for _d in b_fine[fi, :]]
+        smoothed, db = compute_derivative(finekgrid.grid, _b_data, finekgrid, s=(maximum(_w))^2 * 2)
+        b_deriv[fi, :] .= db
+
+        # for ki in eachindex(finekgrid)
+        #     b_deriv[fi, ki] = Interp.differentiate1D(b_fine[fi, :], finekgrid, finekgrid[ki])
+        # end
     end
 
     for fi in eachindex(Fmesh)
+
+        # for ki in 1:length(finekgrid)-1
+        #     # println(finekgrid[ki] / para.kF, ", ", b_fine[fi, ki], ", ", b_deriv[fi, ki], ", ",
+        #     # Interp.integrate1D(b_deriv[fi, :], finekgrid, [finekgrid[ki], finekgrid[ki+1]])
+        #     # )
+        #     temp = Interp.integrate1D(b_deriv[fi, :], finekgrid, [finekgrid[ki], finekgrid[ki+1]])
+        #     target = b_fine[fi, ki+1] - b_fine[fi, ki]
+        #     @printf("%12.6f    %12.6f    %12.6f    %12.6f   %12.6f\n", finekgrid[ki] / para.kF, b_fine[fi, ki], b_deriv[fi, ki], temp, target)
+        # end
+
         test = [-Interp.integrate1D(b_deriv[fi, :], finekgrid, [kgrid[i], finekgrid[end]]) + b_tail(finekgrid[end])[1] for i in 1:length(kgrid)]
         # test = test ./ kgrid
 
@@ -456,8 +463,8 @@ function solve_RG2(a, b_deriv, c_deriv; maxiter=100, mix=0.5)
             _b = -Interp.integrate1D(db_Λ .* u_Λ, Λgrid, [Λ, Λgrid[end]])
             _c = -Interp.integrate1D(dc_Λ .* u_Λ .^ 2, Λgrid, [Λ, Λgrid[end]])
 
-            Fs_Λ_new = -Rex(Fs, Λ) + a_Λ[i] + _b * 1.0 + _c * 0.0
-            u_Λ_new = get_u(Fs, Λ) #temporary value
+            Fs_Λ_new = -Rex(Fs, Λ) + a_Λ[i] + _b * 1.0 + _c * 1.0
+            # u_Λ_new = get_u(Fs, Λ) #temporary value
 
             # println(i, ": Fs = ", Fs_Λ[i], " and u =", u_Λ[i], " with deriv ", db_Λ[i])
             # u_Λ[i] = get_u(Fs_Λ[i], Λ)
@@ -466,7 +473,7 @@ function solve_RG2(a, b_deriv, c_deriv; maxiter=100, mix=0.5)
             end
 
             if iter >= maxiter - 1
-                println("Warning: max iteration reached: ", iter, " with diff ", abs(Fs_Λ_new - Fs_Λ[i]))
+                println("Warning: max iteration reached: ", iter, " with diff ", abs(Fs_Λ_new - Fs_Λ[i]), " at scale ", Λ / para.kF, " with ", Fs_Λ_new[i])
             end
 
             Fs_Λ[i] = Fs_Λ[i] * mix + Fs_Λ_new * (1 - mix)
