@@ -9,7 +9,7 @@ using CompositeGrids
 using PyCall
 using Plots
 
-const rs = 1.0
+const rs = 5.0
 const beta = 25.0
 const mass2 = 0.001
 const order = 1
@@ -18,8 +18,8 @@ const para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=t
 
 # const Fs = RG.fdict[para.rs]
 # const Fs = [-0.5, -0.4, -0.3, -0.2, -0.1, 0.0] #must be in increasing order
-const Fs = [-0.3, -0.2, -0.1, 0.0] #must be in increasing order
-# const Fs = [-1.2, -1.0, -0.8, -0.6, -0.4, -0.2, 0.0] #must be in increasing order
+# const Fs = [-0.3, -0.2, -0.1, 0.0] #must be in increasing order
+const Fs = [-1.2, -1.0, -0.8, -0.6, -0.4, -0.2, 0.0] #must be in increasing order
 # const Λgrid = RG.Λgrid(para.kF)
 const Λgrid = CompositeGrid.LogDensedGrid(:gauss, [1.0 * para.kF, 100 * para.kF], [para.kF,], 8, 0.1 * para.kF, 8)
 const sparseΛgrid = RG.SparseΛgrid(para.kF)
@@ -43,7 +43,7 @@ function get_ver3(dz, dz2)
     para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=true, order=order)
     f_pp = jldopen("data/ver3_PP.jld2", "r")
     f_phe = jldopen("data/ver3_PHE.jld2", "r")
-    f_ph = jldopen("data/ver3_PH.jld2", "r")
+    # f_ph = jldopen("data/ver3_PH.jld2", "r")
     # z1 = zeros(Measurement{Float64}, length(Fs), length(Λgrid))
     ver3_pp = MeshArray(Fs, sparseΛgrid; dtype=Complex{Measurement{Float64}})
     ver3_phe = MeshArray(Fs, sparseΛgrid; dtype=Complex{Measurement{Float64}})
@@ -466,7 +466,6 @@ function solve_RG2(a, b_deriv, c_deriv; maxiter=100, mix=0.5)
             Fs_Λ_new = -Rex(Fs, Λ) + a_Λ[i] + _b * 1.0 + _c * 1.0
             # u_Λ_new = get_u(Fs, Λ) #temporary value
 
-            # println(i, ": Fs = ", Fs_Λ[i], " and u =", u_Λ[i], " with deriv ", db_Λ[i])
             # u_Λ[i] = get_u(Fs_Λ[i], Λ)
             if abs(Fs_Λ_new - Fs_Λ[i]) < 1e-4
                 break
@@ -475,6 +474,8 @@ function solve_RG2(a, b_deriv, c_deriv; maxiter=100, mix=0.5)
             if iter >= maxiter - 1
                 println("Warning: max iteration reached: ", iter, " with diff ", abs(Fs_Λ_new - Fs_Λ[i]), " at scale ", Λ / para.kF, " with ", Fs_Λ_new[i])
             end
+
+            println(iter, ": Fs = ", Fs_Λ_new, " and u =", u_Λ[i])
 
             Fs_Λ[i] = Fs_Λ[i] * mix + Fs_Λ_new * (1 - mix)
             u_Λ[i] = get_u(Fs_Λ[i], Λ)
@@ -505,7 +506,7 @@ b = b .* 2 .* 2 # uGGR + RGGu contributes factor of 2, then u definition contrib
 
 b = b / para.NF
 
-b = b + dz[1]
+# b = b + dz[1]
 
 b_fine, b_deriv = b_on_fine_grid(b)
 
