@@ -9,7 +9,7 @@ using CompositeGrids
 using PyCall
 using Plots
 
-const rs = 1.0
+const rs = 5.0
 const beta = 25.0
 const mass2 = 0.001
 const order = 1
@@ -18,8 +18,8 @@ const para = ParaMC(rs=rs, beta=beta, mass2=mass2, Fs=-0.0, Fa=-0.0, isDynamic=t
 
 # const Fs = RG.fdict[para.rs]
 # const Fs = [-0.5, -0.4, -0.3, -0.2, -0.1, 0.0] #must be in increasing order
-const Fs = [-0.3, -0.2, -0.1, 0.0] #must be in increasing order
-# const Fs = [-1.2, -1.0, -0.8, -0.6, -0.4, -0.2, 0.0] #must be in increasing order
+# const Fs = [-0.3, -0.2, -0.1, 0.0] #must be in increasing order
+const Fs = [-1.2, -1.0, -0.8, -0.6, -0.4, -0.2, 0.0] #must be in increasing order
 # const Λgrid = RG.Λgrid(para.kF)
 const Λgrid = CompositeGrid.LogDensedGrid(:gauss, [1.0 * para.kF, 100 * para.kF], [para.kF,], 8, 0.1 * para.kF, 8)
 const sparseΛgrid = RG.SparseΛgrid(para.kF)
@@ -191,7 +191,7 @@ function plot_fit(Λgrid, finegrid, Fs_Λ, smoothed, dFs_Λ)
 end
 
 function b_tail(k)
-    factor = para.NF / 2 * 4
+    factor = 1.0 / 2 * 4
     B = -π * para.me * para.e0^2 / 2 * factor
     return B / k, -B / k^2
 end
@@ -439,6 +439,7 @@ function solve_RG2(a, b_deriv, c_deriv; maxiter=100, mix=0.5)
     Λgrid = deepcopy(Kmesh)
 
     Fs_Λ = [RG.KO(para, l, para.kF)[1] for l in Λgrid]
+    Fs_Λ_ref = deepcopy(Fs_Λ)
     u_Λ = zeros(length(Λgrid))
 
     a_Λ = zeros(length(Λgrid))
@@ -446,11 +447,14 @@ function solve_RG2(a, b_deriv, c_deriv; maxiter=100, mix=0.5)
     dc_Λ = zeros(length(Λgrid))
 
     #from the last scale to the Fermi surface, inverse iteration
+
+    @printf("%12s    %12s    %12s    %12s    %12s    %12s    %12s\n", "k/kF", "Fs", "Fs_KO", "a", "b", "c", "u")
     for i in reverse(1:length(Λgrid)-1)
         Λ = Λgrid[i]
 
         Fs_Λ[i] = Fs_Λ[i+1]
-        u_Λ[i] = get_u(Fs_Λ[i], Λ) #temporary value
+        # u_Λ[i] = get_u(Fs_Λ[i], Λ) #temporary value
+        u_Λ[i] = a_Λ[i] #temporary value
         for iter in 1:maxiter
             Fs = Fs_Λ[i]
 
@@ -475,6 +479,9 @@ function solve_RG2(a, b_deriv, c_deriv; maxiter=100, mix=0.5)
             if iter >= maxiter - 1
                 println("Warning: max iteration reached: ", iter, " with diff ", abs(Fs_Λ_new - Fs_Λ[i]), " at scale ", Λ / para.kF, " with ", Fs_Λ_new[i])
             end
+
+            # println(Λ / para.kF, " at ", iter, ": Fs = ", Fs_Λ_new, ", ref: ", Fs_Λ_ref[i], " and u =", u_Λ[i])
+            @printf("%12f  %12f    %12f    %12f    %12f    %12f    %12f\n", Λ / para.kF, Fs_Λ_new, Fs_Λ_ref[i], a_Λ[i], db_Λ[i], dc_Λ[i], u_Λ[i])
 
             Fs_Λ[i] = Fs_Λ[i] * mix + Fs_Λ_new * (1 - mix)
             u_Λ[i] = get_u(Fs_Λ[i], Λ)
@@ -505,7 +512,7 @@ b = b .* 2 .* 2 # uGGR + RGGu contributes factor of 2, then u definition contrib
 
 b = b / para.NF
 
-b = b + dz[1]
+# b = b + dz[1]
 
 b_fine, b_deriv = b_on_fine_grid(b)
 
